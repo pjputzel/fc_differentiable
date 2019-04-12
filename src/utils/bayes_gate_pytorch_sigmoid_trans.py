@@ -217,7 +217,8 @@ class ModelTree(nn.Module):
 
         output['leaf_probs'] = leaf_probs
         output['leaf_logp'] = torch.log(leaf_probs)
-        output['y_pred'] = torch.sigmoid(self.linear(output['leaf_logp'])).squeeze(1)
+        y_pred = torch.sigmoid(self.linear(output['leaf_logp'])).squeeze(1)
+        output['y_pred'] = y_pred
 
         if len(y) == 0:
             loss = None
@@ -225,7 +226,8 @@ class ModelTree(nn.Module):
             if self.loss_type == "logistic":
                 output['log_loss'] = self.criterion(self.linear(output['leaf_logp']).squeeze(1), y)
             elif self.loss_type == "MSE":
-                output['log_loss'] = self.criterion(output['y_pred'], y)
+                #output['log_loss'] = self.criterion(output['y_pred'], y)
+                output['log_loss'] = self.criterion(y_pred, y)
             loss = loss + output['log_loss']
             # add regularization on the number of cells fall into the leaf gate of negative samples;
             # todo: replace this part of implementation by adding an attribute in class "Gate" to handle more genreal cases

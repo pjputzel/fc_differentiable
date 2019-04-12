@@ -11,32 +11,13 @@ import pickle
 from copy import deepcopy
 from utils import plot as util_plot
 
-def run_synth_4d(num_samples):
-    start = time.time()
-    SYNTH_DATA_DIR = '../data/synth/'
-    DATASET_NAME = 'synthex_scale=.4_N=2000.pkl'
-    seed = 0
-    np.random.seed(seed)
-    with open(SYNTH_DATA_DIR + DATASET_NAME, 'rb') as f:
-        samples, labels = pickle.load(f)
-        indices = np.random.randint(0, len(samples), len(samples))
-        samples = [samples[i] for i in indices]
-        labels = [labels[i] for i in indices]
-        normalized_samples, offset, scale = dh.normalize_x_list(samples)
-        normalized_samples = [torch.tensor(sample).float() for sample in normalized_samples]
-        labels = torch.tensor(np.array(labels)).float()
+def run_CLL_4d(normalized_samples, labels):
+    start = time.time() 
+    FEATURE2ID = {'M1':0, 'M2':1, 'M3':2, 'M4':3}
 
-        test_samples = normalized_samples[1000:]
-        test_labels = labels[1000:]
-        labels = labels[0:num_samples]
-        normalized_samples = normalized_samples[0:num_samples]
-        FEATURE2ID = {'M1':0, 'M2':1, 'M3':2, 'M4':3}
-
-        
-    
     #output directory for results
-    OUT_DIR = '../output/synth/batch_size=full_batch' #batch_size=100'
-    OUT_NAME = 'batch_size=full_batch_' + 'scale=.4_' +  'te-tr=1000_%d.pkl' %num_samples
+    OUT_DIR = '../output/' #batch_size=100'
+    OUT_NAME = 'testing.pkl' #'scale=.4_' +  'te-tr=1000_%d.pkl' %num_samples
     
     #Sharpness of the logistic smoothing curve, NOT used by the logistic classifier
     LOGISTIC_K = 100
@@ -72,20 +53,20 @@ def run_synth_4d(num_samples):
     
     nested_list = \
         [
-            [[u'M1', 0.000, 1.500], [u'M2', 0.000, 1.500]],
+            [[u'M1', 1000., 2000.], [u'M2', 1000., 2000.]],
             [
                 [
-                    [[u'M3', 0.000, 1.500], [u'M4', 0.000, 1.500]],
+                    [[u'M3', 1000., 2000.], [u'M4', 1000., 2000.]],
                     []
                 ]
             ]
         ]
     nested_list_init = \
         [
-            [[u'M1', 0.500, 0.500], [u'M2', 0.500, 0.500]],
+            [[u'M1', 1000., 2000.], [u'M2', 1000., 2000.]],
             [
                 [
-                    [[u'M3', 0.500, 0.500], [u'M4', 0.500, 0.500]],
+                    [[u'M3', 1000., 2000.], [u'M4', 1000., 2000.]],
                     []
                 ]
             ]
@@ -203,8 +184,39 @@ def run_synth_4d(num_samples):
     
  
 if __name__ == '__main__':
-    num_tr_samples = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
-    for cur_num_tr_samples in num_tr_samples:
-       run_synth_4d(cur_num_tr_samples)
-    #run_synth_4d(1000)
+    #num_tr_samples = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+    #for cur_num_tr_samples in num_tr_samples:
+    #   run_synth_4d(cur_num_tr_samples)
+    CLL_DATA_DIR = '../data/cll/'
+    DATASET_NAME = 'DAFI_gate3-From_Max.pkl'
+    LABELS_FILE = 'y_list.pkl'
+    seed = 0
+    np.random.seed(seed)
+    
+    tr_split = 1.
+    cells_subsample = None
+    #with open(CLL_DATA_DIR + LABELS_FILE, 'rb') as f:
+    #    labels = pickle.load(f)
+    with open(CLL_DATA_DIR + DATASET_NAME, 'rb') as f:
+        samples, labels, sample_names = pickle.load(f)
+        num_tr_samples = int(tr_split * len(samples))
+        indices = np.random.randint(0, len(samples), len(samples))
+        labels = np.array([0. if label=='no' else 1. for label in labels])
+
+        #subsample cells within each sample
+        if cells_subsample:
+            samples = [samples[i][np.random.choice(range(samples[i].shape[0]), cells_subsample, replace=False)] if samples[i].shape[0] > cells_subsample else samples[i] for i in indices]
+        else:
+            samples = [samples[i] for i in indices]
+        labels = [labels[i] for i in indices]
+        
+        normalized_samples, offset, scale = dh.normalize_x_list(samples)
+        normalized_samples = [torch.tensor(sample).float() for sample in normalized_samples]
+        labels = torch.tensor(np.array(labels)).float()
+
+        #test_samples = normalized_samples[1000:]
+        #test_labels = labels[1000:]
+        labels = labels[0:num_tr_samples]
+        normalized_samples = normalized_samples[0:num_tr_samples]
+    run_CLL_4d(normalized_samples, labels)
 
