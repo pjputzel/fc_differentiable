@@ -14,7 +14,7 @@ from utils import plot as util_plot
 def run_synth_4d(num_samples):
     start = time.time()
     SYNTH_DATA_DIR = '../data/synth/'
-    DATASET_NAME = 'synthex_scale=.4_N=2000.pkl'
+    DATASET_NAME = 'synthex_scale=3_N=2000.pkl'
     seed = 0
     np.random.seed(seed)
     with open(SYNTH_DATA_DIR + DATASET_NAME, 'rb') as f:
@@ -35,8 +35,8 @@ def run_synth_4d(num_samples):
         
     
     #output directory for results
-    OUT_DIR = '../output/synth/batch_size=full_batch' #batch_size=100'
-    OUT_NAME = 'batch_size=full_batch_' + 'scale=.4_' +  'te-tr=1000_%d.pkl' %num_samples
+    OUT_DIR = '../output/synth/full_batch/' #batch_size=100'
+    OUT_NAME = 'batch_size=full_batch_' + 'scale=3_' +  'te-tr=1000_%d.pkl' %num_samples
     
     #Sharpness of the logistic smoothing curve, NOT used by the logistic classifier
     LOGISTIC_K = 100
@@ -63,7 +63,7 @@ def run_synth_4d(num_samples):
     n_mini_batch_update_gates = 0 #50
     n_mini_batch = len(normalized_samples) // batch_size
 
-    n_epoch = 700
+    n_epoch = 1000
     n_epoch_eval = 20 
 
     params_dict = {'lr_classifier':learning_rate_classifier, 'lr_gates':learning_rate_gates, 'LOSS_TYPE':LOSS_TYPE, 'OPTIMIZER':'ADAM', 'batch_size':batch_size, 'n_mini_batch_update_gates':n_mini_batch_update_gates, 'n_epoch':n_epoch, 'REGULARIZATION_PENALTY':REGULARIZATION_PENALTY, 'EMPTYNESS_PENALTY':EMPTYNESS_PENALTY, 'GATE_SIZE_DEFAULT':GATE_SIZE_DEFAULT, 'GATE_SIZE_PENALTY':GATE_SIZE_PENALTY, 'LOGISTIC_K':LOGISTIC_K, 'NUM_EPOCHS_PER_EVALUATION':n_epoch_eval}
@@ -82,10 +82,10 @@ def run_synth_4d(num_samples):
         ]
     nested_list_init = \
         [
-            [[u'M1', 0.500, 0.500], [u'M2', 0.500, 0.500]],
+            [[u'M1', 0., .5], [u'M2', 0., .5]],
             [
                 [
-                    [[u'M3', 0.500, 0.500], [u'M4', 0.500, 0.500]],
+                    [[u'M3', 0., .5], [u'M4', 0., .5]],
                     []
                 ]
             ]
@@ -103,7 +103,6 @@ def run_synth_4d(num_samples):
                            init_tree=init_tree, loss_type=LOSS_TYPE, gate_size_default=GATE_SIZE_DEFAULT)
     keys = [ key for key in model_tree.children_dict.keys()]
     
-
     
     
     results_dict = {'losses': None, 'log_losses': None, 'reg_size_losses': None, 'ref_reg_losses': None, 'accs':None, 'precs':None, 'recalls':None, 'log_decision_boundaries':None, 'root_init_gate':deepcopy(model_tree.root), 'leaf_gate_init':deepcopy(model_tree.children_dict[str(id(model_tree.root))][0]), 'learned_root_gate':None, 'learned_leaf_gate': None, 'ref_tree':reference_tree}
