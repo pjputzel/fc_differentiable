@@ -1,2 +1,8 @@
 *.pyc
 *.png
+*.swm
+data/cll/PB.txt
+data/cll/PB1_whole_mqian/
+data/cll/PB2_whole_mqian/
+data/cll/Two_Panel
+
