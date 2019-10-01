@@ -17,11 +17,14 @@ def save_umapper(umapper, savepath):
     with open(savepath, 'wb') as f:
         pickle.dump(umapper, f)
 
-def make_and_save_UMAP_embeddings_in_grid(savedir, data_path, n_neighbors_grid, min_dist_grid, subsample_cells_to=1e5, random_state=1):
+def make_and_save_UMAP_embeddings_in_grid(savedir, data_path, n_neighbors_grid, min_dist_grid, subsample_cells_to=1e5, random_state=1, pool_data=True):
     with open(data_path, 'rb') as f:
         data = pickle.load(f)
-        catted_data = np.concatenate(data)
-        np.random.shuffle(catted_data)
+        if pool_data:
+            catted_data = np.concatenate(data)
+            np.random.shuffle(catted_data)
+        else:
+            catted_data = data
         catted_data = catted_data[0:int(subsample_cells_to)]
     for n_neighbors in n_neighbors_grid:
         for min_dist in min_dist_grid:
@@ -35,11 +38,19 @@ def make_and_save_UMAP_embeddings_in_grid(savedir, data_path, n_neighbors_grid, 
             print('time taken: %d' %(time.time() - start_time))
 
 if __name__ == '__main__':
-    savedir = '../output/UMAP_embeddings'
-    data_path = '../data/cll/x_UMAP_dev_FIXED.pkl'
+    ### For simple GMM data (not the synthethic data from the paper, a new dataset I made to play with UMAP)
+    savedir = '../output/UMAP_embeddings/Simple_GMM_Embeddings'
+    data_path = '../data/synth/diag_var_gmm_data.pkl'
     n_neighbors_grid = [5, 15, 50, 100, 200, 300]
     min_dist_grid = [0., .1, .2, .3, .4, .5]
-    make_and_save_UMAP_embeddings_in_grid(savedir, data_path, n_neighbors_grid, min_dist_grid)
+    make_and_save_UMAP_embeddings_in_grid(savedir, data_path, n_neighbors_grid, min_dist_grid, pool_data=False)
+
+    ### For Dev data embeddings
+    #savedir = '../output/UMAP_embeddings'
+    #data_path = '../data/cll/x_UMAP_dev_FIXED.pkl'
+    #n_neighbors_grid = [5, 15, 50, 100, 200, 300]
+    #min_dist_grid = [0., .1, .2, .3, .4, .5]
+    #make_and_save_UMAP_embeddings_in_grid(savedir, data_path, n_neighbors_grid, min_dist_grid)
 
 
 
