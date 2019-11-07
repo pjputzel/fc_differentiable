@@ -19,6 +19,7 @@ from utils.utils_plot import run_leaf_gate_plots
 from utils.utils_plot import run_gate_motion_from_saved_results
 from utils.utils_plot import *
 from utils.utils_plot_synth import *
+from make_UMAP_embeddings import *
 import yaml
 
 default_hparams = {
@@ -175,8 +176,57 @@ def make_model_loss_plots(output_dir, figsize=(9, 3)):
     plt.tight_layout()
     plt.savefig(savepath, dpi=300, bbox_inches='tight')
 
+def make_umap_plot(embeddings_with_labels):
+
+    embeddings_with_labels = np.concatenate(embeddings_with_labels)
+    positive_samples = embeddings_with_labels[embeddings_with_labels[:, 2] == 1]
+    negative_samples = embeddings_with_labels[embeddings_with_labels[:, 2] == 0]
+    
+    plt.scatter(positive_samples[:, 0], positive_samples[:, 1], color='r', s=.001, alpha=.1)
+    plt.scatter(negative_samples[:, 0], negative_samples[:, 1], color='b', s=.001, alpha=.1)
+    plt.savefig('Embeddings_with_labels_colored.png')
+
+    plt.clf()
+    plt.xlim(-18, -10)
+    plt.ylim(-8, -1)
+    plt.scatter(positive_samples[:, 0], positive_samples[:, 1], color='r', s=.001, alpha=.1)
+    plt.scatter(negative_samples[:, 0], negative_samples[:, 1], color='b', s=.001, alpha=.1)
+    plt.savefig('Embeddings_with_labels_colored_zoomed_in.png')
+    
+
+def make_umap_plot_and_embed_samples(umapper_path, data_path, labels_path):
+    with open(data_path, 'rb') as f:
+        data = pickle.load(f)
+    with open(labels_path, 'rb') as f:
+        labels = pickle.load(f)
+    with open(umapper_path, 'rb') as f:
+        umapper = pickle.load(f)
+    embeddings_with_labels = np.concatenate(embed_samples_with_labels(umapper, data, labels))
+    make_umap_plot(embeddings_with_labels)
+    
+    
+
+
 if __name__ == '__main__':
     warnings.filterwarnings("ignore")
+    
+    ### for plotting a saved per sample umap embedding
+    per_sample_embedding_path = '../output/UMAP_embeddings/Per_Sample_Embeddings_num_neighbors=15_min_dist=0.10.pkl'
+    with open(per_sample_embedding_path, 'rb') as f:
+        per_sample_embeddings = pickle.load(f)
+    print(per_sample_embeddings)
+    make_umap_plot(per_sample_embeddings)
+
+    #for quick umap plot
+    #umapper_path= '../output/UMAP_embeddings/num_neighbors=15_min_dist=0.10.pkl_umapper.pkl'
+    #data_path = '../data/cll/x_UMAP_dev_FIXED.pkl'
+    #labels_path = '../data/cll/y_UMAP_dev.pkl'
+    #make_umap_plots(umapper_path, data_path, labels_path)
+    
+
+
+
+
     #experiment_yaml_file = '../configs/testing_corner_init.yaml'
     #experiment_yaml_file = '../configs/testing_overlaps.yaml'
     #experiment_yaml_file = '../configs/testing_my_heuristic_init.yaml'
@@ -204,12 +254,17 @@ if __name__ == '__main__':
     #path_to_saved_model = '../output/Middle_neg=0.001_diff=0.001_FINAL_OOS_seed0/model.pkl'
     #yaml_filename = '../configs/OOS_Final_Model.yaml'
     #yaml_filename = '../configs/FINAL_MODEL_middle_init.yaml'
-    hparams = default_hparams
-    with open(yaml_filename, "r") as f_in:
-        yaml_params = yaml.safe_load(f_in)
-    hparams.update(yaml_params)
+    
+
+
+
+    #hparams = default_hparams
+    #with open(yaml_filename, "r") as f_in:
+    #    yaml_params = yaml.safe_load(f_in)
+    #hparams.update(yaml_params)
+
     #make_dafi_plot(hparams)
-    make_synth_plot(hparams, model_paths_synth)
+    #make_synth_plot(hparams, model_paths_synth)
     #make_model_plot(hparams, path_to_saved_model, 0)
     #make_model_loss_plots('../output/CV_neg=0.001_diff=0.001_FINAL_OOS_seed0')
     #make_model_plots_both_panels(hparams, path_to_model_checkpoints)

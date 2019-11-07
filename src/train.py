@@ -54,7 +54,7 @@ def run_train_dafi(dafi_model, hparams, input):
     return dafi_model
 
 #Does training with full_batch for just the classifier weights until convergence with adam. Also no tr/te split-for use with just dev data
-def run_train_only_logistic_regression(model, x_tensor_list, y, adam_lr, conv_thresh=1e-10, verbose=True, log_features=None):
+def run_train_only_logistic_regression(model, x_tensor_list, y, adam_lr, conv_thresh=1e-10, verbose=True, log_features=None, l1_reg_strength=0.):
     start = time.time() 
     classifier_params = [model.linear.weight, model.linear.bias]
     optimizer_classifier = torch.optim.Adam(classifier_params, lr=adam_lr)
@@ -73,20 +73,22 @@ def run_train_only_logistic_regression(model, x_tensor_list, y, adam_lr, conv_th
         #features are fixed here, the only thing we need is the change in log loss from logistic params
         #forward pass through entire model is uneccessary!
         log_loss = BCEWithLogits(model.linear(log_features).squeeze(), y)
+        loss = log_loss + l1_reg_strength * torch.norm(model.linear.weight)
+        
         optimizer_classifier.zero_grad()
-        log_loss.backward()
+        loss.backward()
         optimizer_classifier.step()
-        delta = torch.abs(log_loss - prev_loss)
-        prev_loss = log_loss
+        delta = torch.abs(loss - prev_loss)
+        prev_loss = loss
         iters += 1
         if verbose:
-            print(log_loss.item())
+            print(loss.item())
             if iters%100 == 0:
                 print('%.6f ' %(delta), end='')
                 if iters%500 == 0:
                     print('\n')
             print('\n')
-            print('time taken %d, with loss %.2f' %(time.time() - start, log_loss.detach().item()))
+            print('time taken %d, with loss %.2f' %(time.time() - start, loss.detach().item()))
     return model
 
 def init_model_trackers_and_optimizers(hparams, input, model_checkpoint, return_new_model=False, model=None):

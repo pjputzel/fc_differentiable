@@ -362,9 +362,9 @@ def plot_cll_1p_light(normalized_x, filtered_normalized_x, y, FEATURES, model_tr
 def plot_motion_p1(input, epoch_list, model_checkpoint_dict, filename):
     # data to plot on
     input_x_pos = torch.cat([input.x[idx] for idx in range(len(input.y)) if input.y[idx] == 1], dim=0)
-    input_x_pos_subsample = input_x_pos[torch.randperm(input_x_pos.size()[0])][:10_000]
+    input_x_pos_subsample = input_x_pos[torch.randperm(input_x_pos.size()[0])][:10000]
     input_x_neg = torch.cat([input.x[idx] for idx in range(len(input.y)) if input.y[idx] == 0], dim=0)
-    input_x_neg_subsample = input_x_neg[torch.randperm(input_x_neg.size()[0])][:10_000]
+    input_x_neg_subsample = input_x_neg[torch.randperm(input_x_neg.size()[0])][:10000]
 
     gate_root_ref = input.reference_tree.gate
     gate_leaf_ref = input.reference_tree.children[0].gate
@@ -454,9 +454,9 @@ def plot_motion_p1(input, epoch_list, model_checkpoint_dict, filename):
 def plot_motion_p2(input, epoch_list, model_checkpoint_dict, filename):
     # data to plot on
     input_x_pos = torch.cat([input.x[idx] for idx in range(len(input.y)) if input.y[idx] == 1], dim=0)
-    input_x_pos_subsample = input_x_pos[torch.randperm(input_x_pos.size()[0])][:10_000]
+    input_x_pos_subsample = input_x_pos[torch.randperm(input_x_pos.size()[0])][:10000]
     input_x_neg = torch.cat([input.x[idx] for idx in range(len(input.y)) if input.y[idx] == 0], dim=0)
-    input_x_neg_subsample = input_x_neg[torch.randperm(input_x_neg.size()[0])][:10_000]
+    input_x_neg_subsample = input_x_neg[torch.randperm(input_x_neg.size()[0])][:10000]
 
     gate_root_ref = input.reference_tree.gate
     gate_left_ref = input.reference_tree.children[0].gate
@@ -555,9 +555,9 @@ def plot_motion_p2(input, epoch_list, model_checkpoint_dict, filename):
 def plot_motion_p2_swap(input, epoch_list, model_checkpoint_dict, filename):
     # data to plot on
     input_x_pos = torch.cat([input.x[idx] for idx in range(len(input.y)) if input.y[idx] == 1], dim=0)
-    input_x_pos_subsample = input_x_pos[torch.randperm(input_x_pos.size()[0])][:10_000]
+    input_x_pos_subsample = input_x_pos[torch.randperm(input_x_pos.size()[0])][:10000]
     input_x_neg = torch.cat([input.x[idx] for idx in range(len(input.y)) if input.y[idx] == 0], dim=0)
-    input_x_neg_subsample = input_x_neg[torch.randperm(input_x_neg.size()[0])][:10_000]
+    input_x_neg_subsample = input_x_neg[torch.randperm(input_x_neg.size()[0])][:10000]
 
     gate_root_ref = input.reference_tree.gate
     gate_left_ref = input.reference_tree.children[0].gate

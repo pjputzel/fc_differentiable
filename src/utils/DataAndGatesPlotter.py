@@ -1,10 +1,12 @@
 import torch
-import numpy
+import numpy as np
 from collections import namedtuple
 import utils.utils_load_data as dh
 import torch.nn.functional as F
+from utils.DepthOneModel import DepthOneModel
 from utils.bayes_gate import ModelTree
 import seaborn as sb
+import matplotlib.pyplot as plt
 
 class DataAndGatesPlotter():
 
@@ -297,3 +299,31 @@ class DataAndGatesPlotterBoth(DataAndGatesPlotter):
         axis.plot([gate.upp1, gate.low1], [gate.upp2,gate.upp2], c=color, 
             dashes=dashes, linewidth=lw)
         return axis
+
+class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
+    
+    def __init__(self, model, data, color=None):
+
+        self.model = model
+        self.data = np.array(data)
+        self.gates = [DepthOneModel.get_gate(node) for node in model.nodes]
+        #self.filtered_data = [self.data for d in range(len(model.nodes) + 1)]
+        self.dims = np.array([[0, 1] for d in range(len(model.nodes))])
+        self.color = color
+
+    def plot_data_with_gates(self, cell_labels):
+        data_pos = self.data[cell_labels[:, 0] == 1]
+        data_neg = self.data[cell_labels[:, 0] == 0]
+        # just a heuristic to get a decent marker size
+        size = 1000 * 1/self.data.shape[0]
+        plt.scatter(data_pos[:, 0], data_pos[:, 1], color='r', s=size)
+        plt.scatter(data_neg[:, 0], data_neg[:, 1], color='b', alpha=.25, s=size)
+        cm = plt.get_cmap('hsv')
+        colors = cm(np.linspace(0, 1, len(self.gates)))
+        for g in range(len(self.gates)):
+            self.plot_gate(plt.gca(), g, color=colors[g], label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g])
+        plt.legend()
+          
+            
+
+    

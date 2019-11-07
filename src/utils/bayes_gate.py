@@ -89,7 +89,7 @@ class ReferenceTree(object):
 
 #cuts here have to passed through sigmoid activation to get boundaries in (0, 1)
 class ModelNode(nn.Module):
-    def __init__(self, logistic_k, reference_tree, init_tree=None, gate_size_default=1. / 4, is_root=False, panel='both'):
+    def __init__(self, logistic_k, reference_tree, init_tree=None, gate_size_default=(1./4, 1./4), is_root=False, panel='both'):
         """
         :param logistic_k:
         :param reference_tree:
@@ -150,12 +150,24 @@ class ModelNode(nn.Module):
             high2=F.sigmoid(self.gate_upp2_param).item()
         )
 
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = torch.tensor([0.])
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
     def forward(self, x):
         """
         compute the log probability that each cell passes the gate
         :param x: (n_cell, n_cell_features)
         :return: (logp, reg_penalty)
         """
+        self.gate_low1_param.register_hook(self.replace_nans_with_0)
+        self.gate_low2_param.register_hook(self.replace_nans_with_0)
+        self.gate_upp1_param.register_hook(self.replace_nans_with_0)
+        self.gate_upp2_param.register_hook(self.replace_nans_with_0)
+
         gate_low1 = F.sigmoid(self.gate_low1_param)
         gate_low2 = F.sigmoid(self.gate_low2_param)
         gate_upp1 = F.sigmoid(self.gate_upp1_param)
@@ -298,8 +310,9 @@ class SquareModelNode(ModelNode):
 
     def replace_nans_with_0(self, grad):
         if torch.isnan(grad):
+            grad = torch.tensor([0.])
             if torch.cuda.is_available():
-                grad = torch.tensor([0.]).cuda()
+                grad.cuda()
         return torch.autograd.Variable(grad)
 
 
@@ -602,7 +615,11 @@ class ModelTree(nn.Module):
     # Could add case here where an additional number is appended if 
     # gates share the same dimensions
     def get_node_idx(self, node):
-        node_gate = str(node.gate_dim1) + str(node.gate_dim2)
+        node_gate = str(node.gate_dim1) + str(node.gate_dim2) + '-1'
+        node_gate_i = node_gate
+        while node_gate_i in self.node_idxs:
+            suffix = '-' + str(int(node_gate_i[-1]) + 1)
+            node_gate_i = node_gate + suffix
         return node_gate
 
     def make_gates_hard(self):
