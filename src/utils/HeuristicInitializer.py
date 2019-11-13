@@ -7,7 +7,8 @@ class HeuristicInitializer:
         data is a numpy array of all the cells normalized marker data
     '''
     def __init__(self, node_type, gate_data_axes_ids, pos_data, neg_data, 
-            num_gridcells_per_axis=20, consider_all_gates=False, greedy_filtering=False, verbose=False):
+            num_gridcells_per_axis=20, consider_all_gates=False, greedy_filtering=False, verbose=False, isgate_acceptable_func=None):
+        self.is_gate_acceptable_func = is_gate_acceptable_func 
         self.node_type = node_type
         self.num_gates = len(gate_data_axes_ids)
         self.gate_data_axes_ids = gate_data_axes_ids
@@ -56,6 +57,10 @@ class HeuristicInitializer:
 
 
     def find_best_gate(self, gate_idx):
+        if self.is_gate_acceptable_func:
+            is_gate_acceptable = self.is_gate_acceptable_func
+        else:
+            is_gate_acceptable = self.is_gate_acceptable
         cell_locs_x = np.linspace(0., 1., num=self.num_gridcells_per_axis + 1)[1:-1]
         cell_locs_y = np.linspace(0., 1., num=self.num_gridcells_per_axis + 1)[1:-1]
         best_heuristic_score = -1.
@@ -66,7 +71,7 @@ class HeuristicInitializer:
             for y in cell_locs_y:
                 for corner_idx in range(self.NUM_CORNERS):
                     gate = self.extend_gridcell_to_corner_gate(x, y, corner_idx)
-                    if self.is_gate_acceptable(gate):
+                    if is_gate_acceptable(gate):
                         heuristic_score = self.compute_heuristic(gate, gate_data_axes)
                         heuristic_at_each_cell[int(x * self.num_gridcells_per_axis) - 1, int(y * self.num_gridcells_per_axis) - 1, corner_idx] = np.around(heuristic_score, 3)
                         if heuristic_score > best_heuristic_score:
@@ -152,6 +157,48 @@ class HeuristicInitializer:
 
         
         return (pos_prop - neg_prop)
+
+class RepeatedHeuristicInitializer(HeuristicInitializer):
+    
+    def __init__(self, pos_data, neg_gata, node_type, params):
+        self.pos_data = pos_data
+        self.neg_data = neg_data
+        self.node_type = node_type
+        for key in params:
+            setattr(self, key, params[key]) 
+        
+    def init_gates(self):
+        gates = []
+        for g in range(params['num_gates']):
+            initializer = HeuristicInitializer(
+                            self.node_type,
+                            [[0, 1]],
+                            self.pos_data,
+                            self.neg_data,
+                            num_gridcells_per_axis = self.num_gridcells_per_axis,
+                            consider_all_gates = self.consider_all_gates, 
+                            greedy_filtering = self.greedy_filtering,
+                            is_gate_acceptable_func = self.get_current_acceptable_func(gates)
+                        )
+            gate = initializer.construct_heuristic_gates()
+            gates.append(gate)
+        self.init_gates = gates
+    
+        return gates
+
+    def get_current_acceptable_func(self, removed_regions):
+        def is_gate_acceptable(gate):
+            for region in removed_regions:
+                if self.overlaps(gate, region):
+                    return false
+                elif:
+                    #check what else should go here form original is gate acceptable func
+                else:
+                    return true
+        return is_gate_acceptable
+
+
+
 
 
 def from_gpu_to_numpy(tensor):

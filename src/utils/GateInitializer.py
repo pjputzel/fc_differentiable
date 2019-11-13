@@ -29,13 +29,24 @@ class GateInitializer:
         return fake_gates
                 
         
-
-
     def initialize_gates(self):
+        if self.gate_init_params['init_type'] == 'clustering':
+            self.initialize_gates_clustering()
+        elif self.gate_init_params['init_type'] == 'hueristic':
+            self.initialize_gates_heuristic()
+        else:
+            raise ValueError('Gate initialization strategy not recognized')
+
+    def initialize_gates_clustering(self):
         self.compute_cluster_memberships()
         self.init_gates_per_cluster(self.cluster_memberships_tr)
         self.construct_init_gate_tree()
         return self.init_gates
+    
+    def initialize_gates_heuristic(self):
+        self.init_gates = RepeatedHeuristicInitializer(self.gate_init_params['heuristic_params']).init_gates()
+        return self.init_gates
+
 
     def compute_cluster_memberships(self):
         self.catted_x_tr = np.concatenate(self.x_tr)
