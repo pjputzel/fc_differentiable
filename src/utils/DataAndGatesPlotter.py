@@ -310,20 +310,31 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         #self.filtered_data = [self.data for d in range(len(model.nodes) + 1)]
         self.dims = np.array([[0, 1] for d in range(len(model.nodes))])
         self.color = color
+    
+    @staticmethod
+    def get_per_cell_labels(cell_data, labels):
+        return np.array(np.concatenate([labels[i] * torch.ones([cell_data[i].shape[0], 1]) for i in range(len(cell_data))]))
 
-    def plot_data_with_gates(self, cell_labels):
+    def plot_data_with_gates(self, cell_labels, size='default', figscale=8):
         data_pos = self.data[cell_labels[:, 0] == 1]
         data_neg = self.data[cell_labels[:, 0] == 0]
-        # just a heuristic to get a decent marker size
-        size = 1000 * 1/self.data.shape[0]
-        plt.scatter(data_pos[:, 0], data_pos[:, 1], color='r', s=size)
-        plt.scatter(data_neg[:, 0], data_neg[:, 1], color='b', alpha=.25, s=size)
+        if size == 'default':
+            # just a heuristic to get a decent marker size
+            size = 1000 * 1/self.data.shape[0]
+        else:
+            size = size
+        fig, axes = plt.subplots(2, 1, figsize=(figscale, figscale * 2))
+        axes[0].scatter(data_pos[:, 0], data_pos[:, 1], color='r', s=size)
+        axes[1].scatter(data_neg[:, 0], data_neg[:, 1], color='b', s=size)
+        self.plot_all_gates(axes[0])
+        self.plot_all_gates(axes[1])
+        axes[0].legend()
+          
+    def plot_all_gates(self, axis):
         cm = plt.get_cmap('hsv')
         colors = cm(np.linspace(0, 1, len(self.gates)))
         for g in range(len(self.gates)):
-            self.plot_gate(plt.gca(), g, color=colors[g], label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g])
-        plt.legend()
-          
+            self.plot_gate(axis, g, color=colors[g], label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g])
             
 
     

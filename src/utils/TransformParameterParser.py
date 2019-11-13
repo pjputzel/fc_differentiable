@@ -39,6 +39,7 @@ DEFAULT_PARAMS =\
                 'transform_type': 'umap',
                 'embed_dim': 2,
                 'cells_to_subsample': 10000,
+                'num_cells_for_transformer': 10000000000,
                 'umap_params':\
                     {
                         'n_neighbors': 15,

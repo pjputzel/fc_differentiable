@@ -19,12 +19,14 @@ def main(path_to_params):
     print(params)
     if not os.path.exists(params['save_dir']):
         os.makedirs(params['save_dir'])
-
+    with open(os.path.join(params['save_dir'], 'params.pkl'), 'wb') as f:
+        pickle.dump(params, f)
     data_input = DataInput(params['data_params'])
     data_input.split_data()
 
     data_transformer = DataTransformerFactory(params['transform_params']).manufacture_transformer()
-    data_input.embed_data(data_transformer, params['transform_params']['cells_to_subsample']) #cells to subsample should change to a transformer param instead
+    data_input.embed_data(data_transformer, params['transform_params']['cells_to_subsample'], params['transform_params']['num_cells_for_transformer']) #cells to subsample should change to a transformer param instead
+    data_input.save_transformer(params['save_dir'])
 
     data_input.normalize_data()
     init_gate_tree = init_plot_and_save_gates(data_input, params)
@@ -58,6 +60,7 @@ def init_plot_and_save_gates(data_input, params):
     plt.savefig(os.path.join(params['save_dir'], 'init_gates.png'))
     plt.clf()
     return gate_initializer.init_gate_tree
+
 if __name__ == '__main__':
     path_to_params = '../configs/umap_default.yaml'
     main(path_to_params)    

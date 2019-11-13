@@ -10,6 +10,26 @@ class GateInitializer:
     def __init__(self, x_tr, gate_init_params):
         self.gate_init_params = gate_init_params
         self.x_tr = x_tr
+    
+    @staticmethod
+    # for loading a saved model state_dict use these
+    # fake gates to init the model and then load the
+    # state dict to get the correct gate params
+    # also can be used for debugging other parts
+    # of the data pipeline
+    def get_fake_init_gates(num_gates):
+        fake_gates = []
+        for g in range(num_gates):
+            fake_gates.append(
+                [   
+                    ['D1', 0., 0.],
+                    ['D2', 0., 0.]   
+                ]
+            )
+        return fake_gates
+                
+        
+
 
     def initialize_gates(self):
         self.compute_cluster_memberships()
