@@ -357,6 +357,14 @@ class SquareModelNode(ModelNode):
 
         return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
 
+    def get_gate(self):
+        gate_low1_param = F.sigmoid(self.center1_param) - F.sigmoid(self.side_length_param)/2.
+        gate_low2_param = F.sigmoid(self.center2_param) - F.sigmoid(self.side_length_param)/2.
+        gate_upp1_param = F.sigmoid(self.center1_param) + F.sigmoid(self.side_length_param)/2.
+        gate_upp2_param = F.sigmoid(self.center2_param) + F.sigmoid(self.side_length_param)/2.
+        return [gate_low1_param.item(), gate_upp1_param.item(), gate_low2_param.item(), gate_upp2_param.item()]
+
+
     def __repr__(self):
         repr_string = ('ModelNode(\n'
                        '  dims=({dim1}, {dim2}),\n'

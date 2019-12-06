@@ -187,6 +187,18 @@ class DataAndGatesPlotter():
             dashes=dashes, linewidth=lw)
         return axis
 
+    def plot_gate_return_line(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        line, = axis.plot([gate.low1, gate.low1], [gate.low2, gate.upp2], c=color, 
+            label=label, dashes=dashes, linewidth=lw)
+        axis.plot([gate.low1, gate.upp1], [gate.low2, gate.low2], c=color, 
+            dashes=dashes, linewidth=lw)
+        axis.plot([gate.upp1, gate.upp1], [gate.low2, gate.upp2], c=color, 
+            dashes=dashes, linewidth=lw)
+        axis.plot([gate.upp1, gate.low1], [gate.upp2,gate.upp2], c=color, 
+            dashes=dashes, linewidth=lw)
+        return line
+
 
 class DataAndGatesPlotterBoth(DataAndGatesPlotter):
 
@@ -326,15 +338,28 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         fig, axes = plt.subplots(2, 1, figsize=(figscale, figscale * 2))
         axes[0].scatter(data_pos[:, 0], data_pos[:, 1], color='r', s=size)
         axes[1].scatter(data_neg[:, 0], data_neg[:, 1], color='b', s=size)
-        self.plot_all_gates(axes[0])
+        lines_for_legend = self.plot_all_gates(axes[0]) # -1 was here before???
+        pos_feats = self.model(torch.tensor(data_pos.reshape([1, data_pos.shape[0],  -1])), torch.ones([1]))['leaf_logp'][0, :]
+        neg_feats = self.model(torch.tensor(data_neg.reshape([1, data_neg.shape[0], -1])), torch.zeros([1]))['leaf_logp'][0, :]
+                
+
         self.plot_all_gates(axes[1])
-        axes[0].legend()
+        
+        legend1 = axes[0].legend(loc='upper right')
+        legend2 = axes[0].legend([line for line in lines_for_legend], [str(pos_feat.cpu().detach().numpy()) for pos_feat in pos_feats], loc='lower left')
+        axes[0].add_artist(legend1)
+        axes[1].legend([line for line in lines_for_legend], [str(neg_feat.cpu().detach().numpy()) for neg_feat in neg_feats], loc='lower left')
+
+
           
     def plot_all_gates(self, axis):
         cm = plt.get_cmap('hsv')
         colors = cm(np.linspace(0, 1, len(self.gates)))
+        lines_for_legend = []
         for g in range(len(self.gates)):
-            self.plot_gate(axis, g, color=colors[g], label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g])
+            line = self.plot_gate_return_line(axis, g, color=colors[g], label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g])
+            lines_for_legend.append(line)
+        return lines_for_legend
             
 
     

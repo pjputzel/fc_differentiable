@@ -30,6 +30,7 @@ class TransformParameterParser:
 
 DEFAULT_PARAMS =\
     {
+        'random_seed': 0,
         'data_params':\
             {
                 'test_percent': .2, 
@@ -46,9 +47,15 @@ DEFAULT_PARAMS =\
                         'min_dist': 0.10,
                     },
             },
-        'gate_init_params':\
+        'gate_init_cluster_params':\
             {
                 'n_clusters': 15,
+            },
+        'gate_init_multi_heuristic_params':\
+            {
+                'num_gridcells_per_axis': 3,
+                'num_gates': 5,
+                'init_type': 'heuristic_corner',
             },
         'model_params':\
             {
@@ -63,7 +70,7 @@ DEFAULT_PARAMS =\
                 'feature_diff_penalty': 0.,
                 'gate_size_penalty': 0.,
                 'gate_size_default': (0.5, 0.5),
-                'neg_proportion_default':0. ,
+                'neg_proportion_default':0.0001 ,
                 'classifier': True,
             },
         'plot_params':\
@@ -77,5 +84,7 @@ DEFAULT_PARAMS =\
                 'n_epoch': 200,
                 'learning_rate_classifier': 0.05,
                 'learning_rate_gates': 0.05,
+                'conv_thresh': None,
+                'descent_type': 'joint_descent',
             }, 
     }

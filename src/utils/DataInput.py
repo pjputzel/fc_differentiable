@@ -71,4 +71,10 @@ class DataInput:
     def save_transformer(self, savedir):
         savepath = os.path.join(savedir, 'transformer.pkl')
         with open(savepath, 'wb') as f:
-            pickle.dump(self.transformer, f) 
+            pickle.dump(self.transformer, f)
+    
+    def get_pos_cat_tr_data(self):
+        return np.concatenate([data for i, data in enumerate(self.x_tr) if self.y_tr[i] == 1])
+
+    def get_neg_cat_tr_data(self):
+        return np.concatenate([data for i, data in enumerate(self.x_tr) if self.y_tr[i] == 0])

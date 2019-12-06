@@ -9,6 +9,7 @@ import numpy as np
 # simple class to make this depth one model work with the older # model node code
 class InitGate:
     def __init__(self, gate):
+#        print(gate)
         self.gate = Gate(gate, {'D1': 0, 'D2':1})
 
 class DepthOneModel(ModelTree):
@@ -19,11 +20,19 @@ class DepthOneModel(ModelTree):
         self.linear = nn.Linear(len(init_gates), 1)
         self.criterion = nn.BCEWithLogitsLoss()
         self.init_nodes(init_gates)
+        self.num_gates = len(self.nodes)
 
     def init_nodes(self, init_gates):
         self.nodes = nn.ModuleList()
         for gate in init_gates:
             self.nodes.append(self.get_node(gate))
+
+    def add_node(self, gate):
+        self.nodes.append(self.get_node(gate))
+        with torch.no_grad():
+            self.linear.weight = nn.Parameter(torch.cat((self.linear.weight, torch.randn(1, 1)), dim=1))
+#            self.linear.bias = nn.Parameter(torch.cat((self.linear.bias, torch.randn(1))))
+        self.num_gates = self.num_gates + 1
         
     def get_node(self, gate):
         gate = InitGate(gate) 
@@ -127,3 +136,9 @@ class DepthOneModel(ModelTree):
         for node in self.nodes:
             filtered_data.append(self.filter_data_at_single_node(data, node))
         return filtered_data
+
+    def get_gates(self):
+        gates = []
+        for node in self.nodes:
+            gates.append(node.get_gate())
+        return gates
