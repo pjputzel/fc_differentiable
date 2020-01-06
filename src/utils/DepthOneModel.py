@@ -108,6 +108,7 @@ class DepthOneModel(ModelTree):
         self.output['init_reg_loss'] += init_reg_penalty * self.init_reg_penalty/ len(single_sample)
         self.output['leaf_probs'][sample_idx, leaf_idx] = logp.exp().sum(dim=0) / single_sample.shape[0]
 
+    
     def update_output_feat_diff_and_emp_reg(self, x, y):
         pos_mean = 0.
         neg_mean = 0.
@@ -142,3 +143,20 @@ class DepthOneModel(ModelTree):
         for node in self.nodes:
             gates.append(node.get_gate())
         return gates
+
+    def get_gate_tree(self):
+        gates = self.get_gates()
+        tree = []
+        for gate in gates:
+            tree.append(
+                [
+                    ['D1', gate[0], gate[1]],
+                    ['D2', gate[2], gate[3]]
+                ]
+            )
+        return tree
+
+    def fix_size_params(self, size):
+        for node in self.nodes:
+            node.side_length_param.requires_grad = False
+        

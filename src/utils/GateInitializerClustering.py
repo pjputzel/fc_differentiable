@@ -1,4 +1,5 @@
 from sklearn.cluster import KMeans
+from scipy.stats import gaussian_kde
 import numpy as np
 import numpy.matlib
 from collections import namedtuple as NamedTuple
@@ -6,7 +7,7 @@ import matplotlib.pyplot as plt
 
 #TODO: add code for heuristic as well
 
-class GateInitializer:
+class GateInitializerClustering:
     def __init__(self, x_tr, gate_init_params):
         self.gate_init_params = gate_init_params
         self.x_tr = x_tr
@@ -43,7 +44,11 @@ class GateInitializer:
     def compute_cluster_memberships(self):
         self.catted_x_tr = np.concatenate(self.x_tr)
         kmeans = KMeans(n_clusters=self.gate_init_params['n_clusters'])
-        cluster_memberships_tr = kmeans.fit_predict(self.catted_x_tr)
+        if self.gate_init_params['run_kde_first']:
+            cluster_memberships_tr = self.get_memberships_kde_then_cluster(kmeans)
+
+        else:
+            cluster_memberships_tr = kmeans.fit_predict(self.catted_x_tr)
 #        cluster_memberships_tr = kmeans.predict(self.catted_x_tr) 
         self.cluster_memberships_tr = cluster_memberships_tr
     
@@ -55,7 +60,24 @@ class GateInitializer:
             init_gates.append(self.get_single_gate(cluster))
         self.init_gates = init_gates
         
-        
+    def get_memberships_kde_then_cluster(self, kmeans, kde_noise_variance=.0001):
+        kde_data = self.catted_x_tr + np.random.multivariate_normal(np.zeros(self.catted_x_tr.shape[1]), kde_noise_variance * np.eye(2)) #prevent singular matrix apparently some datapoints are identical/overplotted
+        kde_data = kde_data.reshape([kde_data.shape[1], kde_data.shape[0]])
+        kde = gaussian_kde(kde_data)
+
+        grid_for_kde = self.get_grid_for_kde()
+        density_estimate = kde(grid_for_kde.reshape([grid_for_kde.shape[1], grid_for_kde.shape[0]]))
+        avg_density = np.mean(density_estimate)
+        idxs_big_enough_density = np.where(density_estimate > self.gate_init_params['density_threshold_percent_for_kmeans'] * avg_density)
+        data_for_kmeans = grid_for_kde[idxs_big_enough_density]
+        kmeans.fit(data_for_kmeans)
+        return kmeans.predict(self.catted_x_tr)
+
+    def get_grid_for_kde(self):
+        x, y = np.linspace(0, 1, self.gate_init_params['kde_grid_size']), np.linspace(0, 1, self.gate_init_params['kde_grid_size'])
+        x, y = np.meshgrid(x, y)
+        return np.concatenate([x.reshape([-1, 1]), y.reshape([-1, 1])], axis=1) 
+ 
     def get_single_gate(self, cluster, percentile_low=.20, percentile_high=.80):
         cluster_data = self.catted_x_tr[self.cluster_memberships_tr == cluster]
         sorted_x = np.sort(cluster_data[:, 0])

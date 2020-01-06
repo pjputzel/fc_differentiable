@@ -322,7 +322,8 @@ class SquareModelNode(ModelNode):
         :param x: (n_cell, n_cell_features)
         :return: (logp, reg_penalty)
         """
-        self.side_length_param.register_hook(self.replace_nans_with_0)
+        if self.side_length_param.requires_grad:
+            self.side_length_param.register_hook(self.replace_nans_with_0)
         self.center1_param.register_hook(self.replace_nans_with_0)
         self.center2_param.register_hook(self.replace_nans_with_0)
 

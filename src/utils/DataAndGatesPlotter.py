@@ -7,6 +7,7 @@ from utils.DepthOneModel import DepthOneModel
 from utils.bayes_gate import ModelTree
 import seaborn as sb
 import matplotlib.pyplot as plt
+import matplotlib
 
 class DataAndGatesPlotter():
 
@@ -59,14 +60,16 @@ class DataAndGatesPlotter():
     '''
     filters data using the gate from the input node
     '''
-    def filter_data_at_single_node(self, data, node):
+    def filter_data_at_single_node(self, data, node, return_idxs=False):
         gate = DataAndGatesPlotter.get_gate(node)
-        filtered_data = dh.filter_rectangle(
+        return_value = dh.filter_rectangle(
                 data, node.gate_dim1, 
                 node.gate_dim2, gate.low1, gate.upp1, 
-                gate.low2, gate.upp2
+                gate.low2, gate.upp2,
+                return_idx=return_idxs
         )
-        return filtered_data
+        
+        return return_value
 
     def construct_gates(self):
         return self.apply_function_depth_first(
@@ -362,4 +365,67 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         return lines_for_legend
             
 
+    def plot_inverse_UMAP_transform_in_feature_space(self, umapper, untransformed_data, gate_data_idxs=None, figlen=10, ms=.1):
+        matplotlib.rcParams.update({'font.size': 22})
+        data_inside_first_gate_idxs = self.filter_data_at_single_node(self.data, self.model.nodes[0], return_idxs=True)
+        
+        data_inside_first_gate_inverse_transform = untransformed_data[data_inside_first_gate_idxs]#umapper.inverse_transform(data_inside_first_gate)
+
+        # plot gates instead of arbitrary pairs of data
+        if gate_data_idxs:
+        # 2,3 -> SSC-H, CD45 
+        # 0, 1 -> FSC-A, SSC-A
+        # 5, 6 -> CD5, CD19
+            gate_names = {(2, 3): 'SSC-H CD45', (0, 1): 'FSC-A SSC-A', (5, 6): 'CD5 CD19', (10, 7): 'CD10 CD79b'}
+            fig, axes = plt.subplots(len(gate_data_idxs), 1, figsize=(figlen * 1, figlen * len(gate_data_idxs)))
+            for axis, gate_idxs in zip(axes, gate_data_idxs):
+                axis.scatter(untransformed_data[:, gate_idxs[0]], untransformed_data[:, gate_idxs[1]], c='lightgrey', s=ms/10)
+                axis.scatter(data_inside_first_gate_inverse_transform[:, gate_idxs[0]], data_inside_first_gate_inverse_transform[:, gate_idxs[1]], c='r', s=ms)
+                axis.set_title(gate_names[tuple(gate_idxs)])
+        # plot arbitrary pairs of data
+        else:
+            fig, axes = plt.subplots(int(data_inside_first_gate_inverse_transform.shape[1]/2), 1, figsize=(figlen * 1, figlen * int(data_inside_first_gate_inverse_transform.shape[1]/2)))
+            for i, axis in zip(range(data_inside_first_gate_inverse_transform.shape[1]), axes):
+                axis.scatter(untransformed_data[:, [2 * i]], untransformed_data[:, [2 * i + 1]], c='lightgrey', s=ms/10)
+                axis.scatter(data_inside_first_gate_inverse_transform[:, [2 * i]], data_inside_first_gate_inverse_transform[:, [2 * i + 1]], c='r', s=ms)
+
+                
+                
+    def plot_inverse_UMAP_transform_in_feature_space_with_filtering(self, umapper, untransformed_data, gate_data_idxs=None, figlen=5, ms=.1):
+        data_inside_first_gate_idxs = self.filter_data_at_single_node(self.data, self.model.nodes[0], return_idxs=True)
+        
+        data_inside_first_gate_inverse_transform = untransformed_data[data_inside_first_gate_idxs]#umapper.inverse_transform(data_inside_first_gate)
+
+        fig, axes = plt.subplots(len(gate_data_idxs), 1, figsize=(figlen * 1, figlen * len(gate_data_idxs)))
+        #cur_untransformed_data = self.filter_root_untransformed_cll(cur_untransformed_data)
+        #cur_data_inside_first_gate_inverse_transform = self.filter_root_untransformed_cll(cur_data_inside_first_gate_inverse_transform)
+        cur_untransformed_data = untransformed_data
+        cur_data_inside_first_gate_inverse_transform = data_inside_first_gate_inverse_transform
+        i = 0
+        for axis, gate_idxs in zip(axes, gate_data_idxs):
+            if not(i == 0):
+                cur_untransformed_data = self.filter_untransformed_cll(gate_data_idxs[i - 1], cur_untransformed_data)
+                cur_data_inside_first_gate_inverse_transform = self.filter_untransformed_cll(gate_data_idxs[i - 1], cur_data_inside_first_gate_inverse_transform)
+            axis.scatter(cur_untransformed_data[:, gate_idxs[0]], cur_untransformed_data[:, gate_idxs[1]], c='lightgrey', s=ms/10)
+            axis.scatter(cur_data_inside_first_gate_inverse_transform[:, gate_idxs[0]], cur_data_inside_first_gate_inverse_transform[:, gate_idxs[1]], c='r', s=ms)
+            i += 1
+
+    #def filter_root_untransformed_cll(self, data):
+    #    root_gate_data_idxs = []
+    #    root_gate_slope = blah
+    #    dh.blah
     
+    def filter_untransformed_cll(self, gate_idxs, data):
+        # 2,3 -> SSC-H, CD45 
+        # 0, 1 -> FSC-A, SSC-A
+        # 5, 6 -> CD5, CD19
+        gate_boundaries_matching_data = {(2, 3): [102, 921, 2048, 3891], (0, 1): [921, 2150, 102, 921], (5, 6):[1638, 3891, 2150, 3891]}
+        gate = gate_boundaries_matching_data[tuple(gate_idxs)]
+        filtered_data = dh.filter_rectangle(
+                data, gate_idxs[0], 
+                gate_idxs[1], gate[0], gate[1], 
+                gate[2], gate[3],
+        )
+        return filtered_data
+        
+

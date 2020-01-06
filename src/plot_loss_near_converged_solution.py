@@ -67,27 +67,29 @@ def make_all_plots_interpolated(model_gates, gate_idx, params, data_input, n_ste
     step_x_high, step_y_high = (1 + percent_beyond_range - center[0])/n_steps, (1 + percent_beyond_range - center[1])/n_steps
     derivative_magnitudes = []
     losses = []
+    feats = []
     cur_gate = [center[0], center[0], center[1], center[1]]
     for step in range(n_steps):
         cur_gate = [cur_gate[0] + step_x_low, cur_gate[1] + step_x_high, cur_gate[2] + step_y_low, cur_gate[3] + step_y_high]
         print('is cur gate changins?:', cur_gate)
         cur_model = get_model_with_new_gate(gate_idx, cur_gate, params, model_gates, data_input)
-        derivative_magnitude, loss = compute_derivative_magnitude_and_loss(cur_model, data_input, gate_idx)
+        derivative_magnitude, loss, feat = compute_derivative_magnitude_loss_and_feature(cur_model, data_input, gate_idx)
         losses.append(loss)
+        feats.append(feat)
         derivative_magnitudes.append(derivative_magnitude)
     steps_for_plot = np.arange(n_steps)
     axes[0].plot(steps_for_plot, derivative_magnitudes)
     axes[1].plot(steps_for_plot, losses)
     fig.savefig('losses_and_derivatives.png')
 
-def compute_derivative_magnitude_and_loss(cur_model, data_input, gate_idx):
+def compute_derivative_magnitude_loss_and_feature(cur_model, data_input, gate_idx):
     cur_model.zero_grad()
     output = cur_model(data_input.x_tr, data_input.y_tr)
     loss = output['loss']
     loss.backward()
     derivative_magnitude = get_derivative_magnitude(cur_model.nodes[gate_idx])
     derivative_magnitude = get_derivative_magnitude(cur_model.nodes[1])
-    return derivative_magnitude, loss
+    return derivative_magnitude, loss, output['leaf_logp'].cpu().detach().numpy()
     
     
 

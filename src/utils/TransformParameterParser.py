@@ -47,9 +47,18 @@ DEFAULT_PARAMS =\
                         'min_dist': 0.10,
                     },
             },
+        'gate_init_primkde_params':\
+            {
+                'n_boxes': 5,
+                'prim_grid_size': 50,
+                'prim_threshold_percent': .9
+            },
         'gate_init_cluster_params':\
             {
+                'run_kde_first': False,
+                'density_threshold_percent_for_kmeans': .5,
                 'n_clusters': 15,
+                'kde_grid_size': 50
             },
         'gate_init_multi_heuristic_params':\
             {
@@ -79,7 +88,7 @@ DEFAULT_PARAMS =\
             },
         'train_params':\
             {
-                'metrics_to_eval': ['tr_acc', 'te_acc', 'tr_log_loss', 'te_log_loss'],
+                'metrics_to_eval': ['tr_acc', 'te_acc', 'tr_log_loss', 'te_log_loss', 'tr_avg_pos_feat', 'te_avg_pos_feat', 'tr_avg_neg_feat', 'te_avg_neg_feat'],
                 'n_epoch_eval': 20,
                 'n_epoch': 200,
                 'learning_rate_classifier': 0.05,

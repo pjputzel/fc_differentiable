@@ -28,8 +28,8 @@ def main(path_to_params):
     data_input = DataInput(params['data_params'])
     data_input.split_data()
 
-    data_transformer = DataTransformerFactory(params['transform_params']).manufacture_transformer()
-    data_input.embed_data(\
+    data_transformer = DataTransformerFactory(params['transform_params'], params['random_seed']).manufacture_transformer()
+    data_input.embed_data_and_fit_transformer(\
         data_transformer,
         params['transform_params']['cells_to_subsample'], 
         params['transform_params']['num_cells_for_transformer']) 

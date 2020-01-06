@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 
 '''
@@ -17,6 +18,12 @@ class MetricsTracker:
                 'tr_auc': self.compute_tr_auc, 'te_auc': self.compute_te_auc,
                 'tr_log_loss': self.compute_tr_log_loss, 
                 'te_log_loss': self.compute_te_log_loss,
+                'tr_features': self.compute_tr_features,
+                'te_features': self.compute_te_features,
+                'tr_avg_pos_feat': self.compute_tr_pos_feat_avg,
+                'te_avg_pos_feat': self.compute_te_pos_feat_avg,
+                'tr_avg_neg_feat': self.compute_tr_neg_feat_avg,
+                'te_avg_neg_feat': self.compute_te_neg_feat_avg,
             }
         self.init_metric_funcs_and_metrics(metric_names)
     
@@ -67,6 +74,12 @@ class MetricsTracker:
         y_pred = y_pred.reshape(y_true.cpu().numpy().shape)
         y_true = self.data_input.y_te
         return roc_auc_score(y_true.cpu().detach().numpy(), y_pred, average='macro')
+    
+    def compute_tr_features(self, cur_outputs):
+        return self.compute_features(cur_outputs, split='tr')
+
+    def compute_te_features(self, cur_outputs):
+        return self.compute_features(cur_outputs, split='te')
 
     def compute_tr_log_loss(self, cur_outputs):
         return cur_outputs['tr']['log_loss']
@@ -80,5 +93,27 @@ class MetricsTracker:
     def compute_neg_prop_reg(self, cur_outputs, split='tr'):
         return cur_outputs[split]['emp_reg_loss']
 
+    def compute_tr_pos_feat_avg(self, cur_outputs):
+        features = cur_outputs['tr']['leaf_logp']
+        pos_features = [feature.cpu().detach().numpy() for i, feature in enumerate(features) if self.data_input.y_tr[i] == 1]
+        return np.mean(pos_features)
 
+    def compute_te_pos_feat_avg(self, cur_outputs):
+        features = cur_outputs['te']['leaf_logp']
+        pos_features = [feature.cpu().detach().numpy() for i, feature in enumerate(features) if self.data_input.y_te[i] == 1]
+        return np.mean(pos_features)
+
+    def compute_tr_neg_feat_avg(self, cur_outputs):
+        features = cur_outputs['tr']['leaf_logp']
+        neg_features = [feature.cpu().detach().numpy() for i, feature in enumerate(features) if self.data_input.y_tr[i] == 0]
+        return np.mean(neg_features)
+
+    def compute_te_neg_feat_avg(self, cur_outputs):
+        features = cur_outputs['te']['leaf_logp']
+        neg_features = [feature.cpu().detach().numpy() for i, feature in enumerate(features) if self.data_input.y_te[i] == 0]
+        return np.mean(neg_features)
+
+
+    def compute_features(self, cur_outputs, split='tr'):
+        return cur_outputs[split]['leaf_logp']
 

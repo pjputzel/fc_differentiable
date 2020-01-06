@@ -39,6 +39,9 @@ def run_train_until_convergence_joint(model, train_params, data_input, tracker, 
                 tracker.update(epoch)
                 print_cur_metrics(tracker)
             epoch += 1
+        #update tracker one last time
+        if not epoch - 1 == tracker.epochs[-1]:
+            tracker.update(epoch)
 
 
 def run_train_until_convergence_coord(model, train_params, data_input, tracker, optimizer_gates, conv_thresh):
@@ -55,6 +58,8 @@ def run_train_until_convergence_coord(model, train_params, data_input, tracker, 
                 tracker.update(epoch)
                 print_cur_metrics(tracker)
             epoch += 1
+        if not epoch - 1 == tracker.epochs[-1]:
+            tracker.update(epoch)
 
 def run_train_fixed_epochs_joint(model, train_params, data_input, tracker, full_optimizer):
     for epoch in range(train_params['n_epoch']):
@@ -62,6 +67,8 @@ def run_train_fixed_epochs_joint(model, train_params, data_input, tracker, full_
         if epoch % train_params['n_epoch_eval'] == 0:
             tracker.update(epoch)
             print_cur_metrics(tracker)
+    if not epoch - 1 == tracker.epochs[-1]:
+        tracker.update(epoch)
 
 def run_train_fixed_epochs_coord(model, train_params, data_input, tracker, optimizer_gates):
     for epoch in range(train_params['n_epoch']):
@@ -72,6 +79,8 @@ def run_train_fixed_epochs_coord(model, train_params, data_input, tracker, optim
         if epoch % train_params['n_epoch_eval'] == 0:
             tracker.update(epoch)
             print_cur_metrics(tracker)
+    if not epoch - 1 == tracker.epochs[-1]:
+        tracker.update(epoch)
 
 
 def setup_tracker(model, data_input, metrics):

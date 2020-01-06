@@ -1,4 +1,4 @@
-save_dir: '../output/repeated_init_testing_plotting/'
+save_dir: '../output/default_umap/'
 
 model_params:
     node_type: 'square'
@@ -9,8 +9,8 @@ data_params:
     test_percent: .05
 
 transform_params:
-    cells_to_subsample: 10000
-    num_cells_for_transformer: 100000
+    cells_to_subsample: 10
+    num_cells_for_transformer: 100
     transform_type: 'umap' 
 
 gate_init_multi_heuristic_params:
