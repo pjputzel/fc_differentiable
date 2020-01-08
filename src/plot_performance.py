@@ -25,13 +25,13 @@ def simple_diagnostics_plot(trackers_path):
     plt.clf()
 
     update_last_tracker_to_have_features_at_convergence(trackers)   
-    pos_features_tr = np.array([feature for i, feature in enumerate(trackers[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 1)])[:, np.newaxis]
-    neg_features_tr = np.array([feature for i, feature in enumerate(trackers[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 0)])[:, np.newaxis]
+    pos_features_tr = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 1)])[:, np.newaxis]
+    neg_features_tr = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 0)])[:, np.newaxis]
     print(pos_features_tr.shape, neg_features_tr.shape)
     #neg_features_tr = np.array([tracker.metrics['tr_avg_neg_feat'][-1] for tracker in trackers])[:, np.newaxis]
 
-    pos_features_te = np.array([feature for i, feature in enumerate(trackers[-1].metrics['te_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_te[i] == 1)])[:, np.newaxis]
-    neg_features_te = np.array([feature for i, feature in enumerate(trackers[-1].metrics['te_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 0)])[:, np.newaxis]
+    pos_features_te = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['te_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_te[i] == 1)])[:, np.newaxis]
+    neg_features_te = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['te_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 0)])[:, np.newaxis]
     print(pos_features_tr.shape, neg_features_tr.shape)
     #neg_features_tr = np.array([tracker.metrics['tr_avg_neg_feat'][-1] for tracker in trackers])[:, np.newaxis]
     plt.boxplot([pos_features_tr, neg_features_tr], showfliers=False, labels=['Positive Log-Features Train', 'Negative Log-Features Train'])
@@ -197,10 +197,11 @@ def get_avg_feats_one_converged_gate(tracker, split):
     
 
 if __name__ == '__main__':
-    trackers_dir = '../output/one_by_one_clustering_with_loss_heuristic_final_version/trackers.pkl' #'../output/boxplot_testing/trackers.pkl'
+    #trackers_dir = '../output/one_by_one_clustering_with_loss_heuristic_final_version/trackers.pkl' #'../output/boxplot_testing/trackers.pkl'
+    trackers_dir = '../output/default_umap/trackers.pkl'
     simple_diagnostics_plot(trackers_dir)
 
-    trackers_per_run_dir = '../output/eval_grid_final_run/trackers_per_run.pkl'
-    with open(trackers_per_run_dir, 'rb') as f:
-        trackers_per_run = pickle.load(f)
-    print(get_avg_results_size_eval(trackers_per_run)) 
+    #trackers_per_run_dir = '../output/eval_grid_final_run/trackers_per_run.pkl'
+    #with open(trackers_per_run_dir, 'rb') as f:
+    #    trackers_per_run = pickle.load(f)
+    #print(get_avg_results_size_eval(trackers_per_run)) 

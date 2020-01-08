@@ -130,6 +130,8 @@ def get_next_gate_tree(unused_gate_trees, data_input, params, model=None):
 
 
 if __name__ == '__main__':
-    path_to_params = '../configs/umap_clustering_default.yaml'
+    path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
+#    path_to_params = '../configs/umap_clustering_default.yaml'
+#    path_to_params = '../configs/aml_testing.yaml'
     main(path_to_params)    
 
