@@ -24,6 +24,10 @@ class MetricsTracker:
                 'te_avg_pos_feat': self.compute_te_pos_feat_avg,
                 'tr_avg_neg_feat': self.compute_tr_neg_feat_avg,
                 'te_avg_neg_feat': self.compute_te_neg_feat_avg,
+                'tr_reg_feat_diff': self.compute_tr_reg_feat_diff,
+                'te_reg_feat_diff': self.compute_te_reg_feat_diff,
+                'tr_feat_diff_reg_per_sample': self.compute_tr_reg_feat_diff_per_sample,
+                'dummy_test_function': self.print_meow
             }
         self.init_metric_funcs_and_metrics(metric_names)
     
@@ -35,16 +39,38 @@ class MetricsTracker:
                 self.metric_funcs[metric_name] = self.supported_metrics_funcs[metric_name]
                 self.metrics[metric_name] = []
             else:
-                raise ValueError('Metric %s not implemented' %metric)
+                raise ValueError('Metric %s not implemented' %metric_name)
 
     def update(self, epoch):
         self.epochs.append(epoch)
         output_tr = self.model(self.data_input.x_tr, self.data_input.y_tr)
+        self.add_feat_diff_reg_per_sample_to_tr_output(output_tr) 
         output_te = self.model(self.data_input.x_te, self.data_input.y_te)
         cur_outputs = {'tr': output_tr, 'te': output_te}
         for metric_name in self.metric_names:
             self.metrics[metric_name].append(self.metric_funcs[metric_name](cur_outputs))
-                
+    
+    def add_feat_diff_reg_per_sample_to_tr_output(self, cur_outputs_tr):
+        pos_mean = self.compute_pos_mean_feat(cur_outputs_tr)
+        neg_mean = self.compute_neg_mean_feat(cur_outputs_tr)
+        estimated_feat_diff_regs_per_sample = []
+        for i, label in enumerate(self.data_input.y_tr):
+            if label == 0:
+                estimated_feat_diff_regs_per_sample.append(self.get_feat_diff_reg(cur_outputs_tr['leaf_logp'][i], pos_mean))
+            else:
+                estimated_feat_diff_regs_per_sample.append(self.get_feat_diff_reg(cur_outputs_tr['leaf_logp'][i], neg_mean))
+        
+        cur_outputs_tr['feat_diff_reg_per_sample'] = estimated_feat_diff_regs_per_sample
+        
+    def compute_pos_mean_feat(self, cur_outputs):
+        return np.mean(cur_outputs['leaf_logp'][self.data_input.y_tr == 1].detach().numpy())
+
+    def compute_neg_mean_feat(self, cur_outputs):
+        return np.mean(cur_outputs['leaf_logp'][self.data_input.y_tr == 0].detach().numpy())
+
+    def get_feat_diff_reg(self, feature, relative_mean):
+        return -np.log(((feature - relative_mean)**2).detach().numpy())
+
     def compute_tr_acc(self, cur_outputs):
         tr_output = cur_outputs['tr']
         y_true = self.data_input.y_tr
@@ -87,6 +113,12 @@ class MetricsTracker:
     def compute_te_log_loss(self, cur_outputs):
         return cur_outputs['te']['log_loss']
 
+    def compute_tr_reg_feat_diff(self, cur_outputs):
+        return self.compute_feature_diff_reg(cur_outputs, split='tr')
+
+    def compute_te_reg_feat_diff(self, cur_outputs):
+        return self.compute_feature_diff_reg(cur_outputs, split='te')
+
     def compute_feature_diff_reg(self, cur_outputs, split='tr'):
         return cur_outputs[split]['feature_diff_reg']
 
@@ -117,3 +149,8 @@ class MetricsTracker:
     def compute_features(self, cur_outputs, split='tr'):
         return cur_outputs[split]['leaf_logp']
 
+    def compute_tr_reg_feat_diff_per_sample(self, cur_outputs):
+        return cur_outputs['tr']['feat_diff_reg_per_sample']
+
+    def print_meow(self, cur_outputs, split='tr'):
+        print('meow')

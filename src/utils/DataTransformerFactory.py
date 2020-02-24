@@ -6,6 +6,7 @@ class DataTransformerFactory:
         self.params = params
         self.transform_type = self.params['transform_type']
         self.random_seed = random_seed
+
     def manufacture_transformer(self):
         if self.transform_type == 'umap':
             transformer = self.manufacture_umapper()

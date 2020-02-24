@@ -1,3 +1,6 @@
+# for main_UMAP_with_repeated_gates_and_clustering.py except only with a single gate
+
+
 import umap
 import warnings
 import pickle
@@ -17,7 +20,7 @@ import os
 import time
 from copy import deepcopy
 
-def main(path_to_params):
+def cross_validate(path_to_params, n_runs):
     start_time = time.time()
 
     params = TransformParameterParser(path_to_params).parse_params()
@@ -34,50 +37,56 @@ def main(path_to_params):
         pickle.dump(params, f)
 
     data_input = DataInput(params['data_params'])
-    data_input.split_data()
+    te_accs = []
+    tr_accs = []
+    for run in range(n_runs):
+        if not os.path.exists(os.path.join(params['save_dir'], 'run%d' %run)):
+            os.makedirs(os.path.join(params['save_dir'], 'run%d' % run))
+        savepath = os.path.join(params['save_dir'], 'run%d' %run)
+        data_input.split_data()
+        print(data_input.idxs_tr)
 
-    data_transformer = DataTransformerFactory(params['transform_params'], params['random_seed']).manufacture_transformer()
+        data_transformer = DataTransformerFactory(params['transform_params'], params['random_seed']).manufacture_transformer()
 
-    data_input.embed_data_and_fit_transformer(\
-        data_transformer,
-        cells_to_subsample=params['transform_params']['cells_to_subsample'],
-        num_cells_for_transformer=params['transform_params']['num_cells_for_transformer'],
-        use_labels_to_transform_data=params['transform_params']['use_labels_to_transform_data']
-    ) 
-    data_input.save_transformer(params['save_dir'])
-    data_input.normalize_data()
-    unused_cluster_gate_inits = init_plot_and_save_gates(data_input, params)
-    #everything below differs from the other main_UMAP
-    data_input.convert_all_data_to_tensors()
-    init_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=None)
-    model = initialize_model(params['model_params'], [init_gate_tree])
-    trackers_per_round = []
-    num_gates_left = len(unused_cluster_gate_inits)
-    #print(num_gates_left, 'asdfasdfasdfasdfasdfasdfas')
-    for i in range(num_gates_left + 1):
+        data_input.embed_data_and_fit_transformer(\
+            data_transformer,
+            cells_to_subsample=params['transform_params']['cells_to_subsample'],
+            num_cells_for_transformer=params['transform_params']['num_cells_for_transformer'],
+            use_labels_to_transform_data=params['transform_params']['use_labels_to_transform_data']
+        ) 
+        data_input.save_transformer(savepath)
+        data_input.normalize_data()
+        unused_cluster_gate_inits = init_plot_and_save_gates(data_input, params)
+        #everything below differs from the other main_UMAP
+        data_input.convert_all_data_to_tensors()
+        init_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=None)
+        model = initialize_model(params['model_params'], [init_gate_tree])
         performance_tracker = run_train_model(model, params['train_params'], data_input)
-        if not i == num_gates_left:
-            next_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=model)
-            model.add_node(next_gate_tree)
-        trackers_per_round.append(performance_tracker)
+            
+        model_save_path = os.path.join(savepath, 'model.pkl')
+        torch.save(model.state_dict(), model_save_path)
         
-    model_save_path = os.path.join(params['save_dir'], 'model.pkl')
-    torch.save(model.state_dict(), model_save_path)
-    
-    trackers_save_path = os.path.join(params['save_dir'], 'trackers.pkl')
-    with open(trackers_save_path, 'wb') as f:
-        pickle.dump(trackers_per_round, f)
-    results_plotter = DataAndGatesPlotterDepthOne(model, np.concatenate(data_input.x_tr))
-    #fig, axes = plt.subplots(params['gate_init_params']['n_clusters'], figsize=(1 * params['gate_init_params']['n_clusters'], 3 * params['gate_init_params']['n_clusters']))
-    results_plotter.plot_data_with_gates(np.array(np.concatenate([data_input.y_tr[i] * torch.ones([data_input.x_tr[i].shape[0], 1]) for i in range(len(data_input.x_tr))])))
+        tracker_save_path = os.path.join(savepath, 'tracker.pkl')
+        with open(tracker_save_path, 'wb') as f:
+            pickle.dump(performance_tracker, f)
+        results_plotter = DataAndGatesPlotterDepthOne(model, np.concatenate(data_input.x_tr))
+        #fig, axes = plt.subplots(params['gate_init_params']['n_clusters'], figsize=(1 * params['gate_init_params']['n_clusters'], 3 * params['gate_init_params']['n_clusters']))
+        results_plotter.plot_data_with_gates(np.array(np.concatenate([data_input.y_tr[i] * torch.ones([data_input.x_tr[i].shape[0], 1]) for i in range(len(data_input.x_tr))])))
 
-    plt.savefig(os.path.join(params['save_dir'], 'final_gates.png'))
+        plt.savefig(os.path.join(savepath, 'final_gates.png'))
 
 
-    with open(os.path.join(params['save_dir'], 'configs.pkl'), 'wb') as f:
-        pickle.dump(params, f)
+        with open(os.path.join(savepath, 'configs.pkl'), 'wb') as f:
+            pickle.dump(params, f)
 
-    print('Complete main loop took %.4f seconds' %(time.time() - start_time))
+        print('Complete main loop for run %d took %.4f seconds' %(run, time.time() - start_time))
+        print('Accuracy tr %.3f, te %.3f' %(performance_tracker.metrics['tr_acc'][-1], performance_tracker.metrics['te_acc'][-1]))
+        te_accs.append(performance_tracker.metrics['te_acc'][-1])
+        tr_accs.append(performance_tracker.metrics['tr_acc'][-1])
+    tr_accs = np.array(tr_accs)
+    te_accs = np.array(te_accs)
+    print('Average tr acc: %.3f, te acc %.3f' %(np.mean(tr_accs), np.mean(te_accs)))
+    print('Std dev tr acc: %.3f, te_acc %.3f' %(np.std(tr_accs), np.std(te_accs)))
 
 
 def set_random_seeds(params):
@@ -139,5 +148,6 @@ if __name__ == '__main__':
     path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
 #    path_to_params = '../configs/umap_clustering_default.yaml'
 #    path_to_params = '../configs/aml_testing.yaml'
-    main(path_to_params)    
+    n_runs = 50
+    cross_validate(path_to_params, n_runs)
 

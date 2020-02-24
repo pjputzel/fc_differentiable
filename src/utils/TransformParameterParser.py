@@ -38,6 +38,7 @@ DEFAULT_PARAMS =\
         'transform_params':\
             {
                 'transform_type': 'umap',
+                'use_labels_to_transform_data': False,
                 'embed_dim': 2,
                 'cells_to_subsample': 10000,
                 'num_cells_for_transformer': 10000000000,
@@ -88,7 +89,7 @@ DEFAULT_PARAMS =\
             },
         'train_params':\
             {
-                'metrics_to_eval': ['tr_acc', 'te_acc', 'tr_log_loss', 'te_log_loss', 'tr_avg_pos_feat', 'te_avg_pos_feat', 'tr_avg_neg_feat', 'te_avg_neg_feat'],
+                'metrics_to_eval': ['tr_acc', 'te_acc', 'tr_log_loss', 'te_log_loss', 'tr_avg_pos_feat', 'te_avg_pos_feat', 'tr_avg_neg_feat', 'te_avg_neg_feat', 'tr_reg_feat_diff', 'tr_feat_diff_reg_per_sample'],
                 'n_epoch_eval': 20,
                 'n_epoch': 200,
                 'learning_rate_classifier': 0.05,

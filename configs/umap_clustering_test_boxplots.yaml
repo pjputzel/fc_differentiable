@@ -1,0 +1,37 @@
+# To run a new experiment:
+#   1. Double check that the two subsampling numbers look correct
+#   2. Double check the data paths look correct
+#   3. Double check the number of clusters
+#   4. Make sure the save_dir matches the experiment name!!
+
+
+save_dir: '../output/boxplot_testing/'
+
+model_params:
+    node_type: 'square'
+
+data_params:
+    path_to_x_list:  '../data/cll/x_UMAP_dev.pkl' #'../data/aml_data_tr.pkl' #
+    path_to_labels: '../data/cll/y_UMAP_dev.pkl' #'../data/aml_labels_tr.pkl'   #
+    test_percent: .05
+
+transform_params:
+    cells_to_subsample: 100
+    num_cells_for_transformer: 100
+    transform_type: 'umap' 
+
+gate_init_cluster_params:
+    n_clusters: 3
+    run_kde_first: False
+ 
+train_params:
+    #n_epoch: 20
+    conv_thresh: 0.00001
+    learning_rate_classifier: 0.001
+    learning_rate_gates: .05
+    l1_reg_strength: .00
+    feat_diff_reg: .00
+    descent_type: 'coordinate_descent'
+    
+
+

@@ -124,8 +124,9 @@ def step_gate_params(model, data_input, optimizer_gates):
 def print_cur_metrics(tracker):
     display_str = '[epoch %d]' %tracker.epochs[-1] 
     for metric in tracker.metrics:
-        metric_str = '  %s: %.4f  ' %(metric, tracker.metrics[metric][-1])
-        display_str += metric_str
+        if not (metric == 'tr_feat_diff_reg_per_sample'):
+            metric_str = '  %s: %.4f  ' %(metric, tracker.metrics[metric][-1])
+            display_str += metric_str
     print(display_str)
 
 

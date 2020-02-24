@@ -1,0 +1,5 @@
+experiment_name: 'default_p1_testing'
+
+data:
+    features_path: '../data/cll/x_UMAP_dev.pkl'
+    labels_path: '../data/cll/y_UMAP_dev.pkl'

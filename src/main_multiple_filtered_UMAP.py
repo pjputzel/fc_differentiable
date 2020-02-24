@@ -47,27 +47,51 @@ def main(path_to_params):
     data_input.save_transformer(params['save_dir'])
     data_input.normalize_data()
     unused_cluster_gate_inits = init_plot_and_save_gates(data_input, params)
-    #everything below differs from the other main_UMAP
+
     data_input.convert_all_data_to_tensors()
+
     init_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=None)
-    model = initialize_model(params['model_params'], [init_gate_tree])
-    trackers_per_round = []
-    num_gates_left = len(unused_cluster_gate_inits)
-    #print(num_gates_left, 'asdfasdfasdfasdfasdfasdfas')
-    for i in range(num_gates_left + 1):
-        performance_tracker = run_train_model(model, params['train_params'], data_input)
-        if not i == num_gates_left:
-            next_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=model)
-            model.add_node(next_gate_tree)
-        trackers_per_round.append(performance_tracker)
+    model1 = initialize_model(params['model_params'], [init_gate_tree])
+
+    performance_tracker1 = run_train_model(model1, params['train_params'], data_input)
         
-    model_save_path = os.path.join(params['save_dir'], 'model.pkl')
-    torch.save(model.state_dict(), model_save_path)
+    model1_save_path = os.path.join(params['save_dir'], 'model1.pkl')
+    torch.save(model1.state_dict(), model1_save_path)
     
-    trackers_save_path = os.path.join(params['save_dir'], 'trackers.pkl')
-    with open(trackers_save_path, 'wb') as f:
-        pickle.dump(trackers_per_round, f)
-    results_plotter = DataAndGatesPlotterDepthOne(model, np.concatenate(data_input.x_tr))
+    tracker1_save_path = os.path.join(params['save_dir'], 'tracker1.pkl')
+    with open(tracker1_save_path, 'wb') as f:
+        pickle.dump(performance_tracker1, f)
+
+
+    # now select the data inside the learned model1 gate and re-run umap
+    data_input.filter_data_inside_first_model_gate(model1)
+    unused_cluster_gate_inits = init_plot_and_save_gates(data_input, params)
+
+    data_transformer = DataTransformerFactory(params['transform_params'], params['random_seed']).manufacture_transformer()
+
+    data_input.embed_data_and_fit_transformer(\
+        data_transformer,
+        cells_to_subsample=params['transform_params']['cells_to_subsample'],
+        num_cells_for_transformer=params['transform_params']['num_cells_for_transformer'],
+        use_labels_to_transform_data=params['transform_params']['use_labels_to_transform_data']
+    ) 
+    data_input.save_transformer(params['save_dir'])
+    data_input.convert_all_data_to_tensors()
+    
+    init_gate_tree, _ = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=None)
+    model2 = initialize_model(params['model_params'], [init_gate_tree])
+
+    performance_tracker2 = run_train_model(model2, params['train_params'], data_input)
+        
+    model2_save_path = os.path.join(params['save_dir'], 'model2.pkl')
+    torch.save(model2.state_dict(), model2_save_path)
+    
+    tracker2_save_path = os.path.join(params['save_dir'], 'tracker2.pkl')
+    with open(tracker2_save_path, 'wb') as f:
+        pickle.dump(performance_tracker2, f)
+
+
+    results_plotter = DataAndGatesPlotterDepthOne(model2, np.concatenate(data_input.x_tr))
     #fig, axes = plt.subplots(params['gate_init_params']['n_clusters'], figsize=(1 * params['gate_init_params']['n_clusters'], 3 * params['gate_init_params']['n_clusters']))
     results_plotter.plot_data_with_gates(np.array(np.concatenate([data_input.y_tr[i] * torch.ones([data_input.x_tr[i].shape[0], 1]) for i in range(len(data_input.x_tr))])))
 
@@ -136,8 +160,9 @@ def get_next_gate_tree(unused_gate_trees, data_input, params, model=None):
 
 if __name__ == '__main__':
 #    path_to_params = '../configs/umap_transform_with_labels.yaml'
-    path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
+    #path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
 #    path_to_params = '../configs/umap_clustering_default.yaml'
 #    path_to_params = '../configs/aml_testing.yaml'
+    path_to_params = '../configs/umap_multiple_filtering.yaml'
     main(path_to_params)    
 

@@ -376,7 +376,7 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         # 2,3 -> SSC-H, CD45 
         # 0, 1 -> FSC-A, SSC-A
         # 5, 6 -> CD5, CD19
-            gate_names = {(2, 3): 'SSC-H CD45', (0, 1): 'FSC-A SSC-A', (5, 6): 'CD5 CD19', (10, 7): 'CD10 CD79b'}
+            gate_names = {(3, 4): 'SSC-H CD45', (0, 2): 'FSC-A SSC-A', (6, 7): 'CD5 CD19', (11, 8): 'CD10 CD79b', (0, 1):'FSC-A FSC-H', (2, 3): 'SSC-A SSC-H', (-1, 5): 'CD 38 CD22'}
             fig, axes = plt.subplots(len(gate_data_idxs), 1, figsize=(figlen * 1, figlen * len(gate_data_idxs)))
             for axis, gate_idxs in zip(axes, gate_data_idxs):
                 axis.scatter(untransformed_data[:, gate_idxs[0]], untransformed_data[:, gate_idxs[1]], c='lightgrey', s=ms/10)

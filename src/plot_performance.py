@@ -5,7 +5,7 @@ import os
 
 SIZES = [0.025, 0.05, .1, .2, .3]
 
-def simple_diagnostics_plot(trackers_path):
+def simple_diagnostics_plot(trackers_path, trackers_path2=None):
     with open(trackers_path, 'rb') as f:
         trackers = pickle.load(f)
     tr_losses, tr_accs = get_results_per_converged_gate_tr(trackers)
@@ -28,13 +28,24 @@ def simple_diagnostics_plot(trackers_path):
     pos_features_tr = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 1)])[:, np.newaxis]
     neg_features_tr = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 0)])[:, np.newaxis]
     print(pos_features_tr.shape, neg_features_tr.shape)
+
+    if trackers_path2:
+        with open(trackers_path2, 'rb') as f:
+            trackers2 = pickle.load(f)
+        update_last_tracker_to_have_features_at_convergence(trackers2)   
+        pos_features_tr2 = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers2[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 1)])[:, np.newaxis]
+        neg_features_tr2 = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers2[-1].metrics['tr_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 0)])[:, np.newaxis]
+        plt.boxplot([pos_features_tr, neg_features_tr, pos_features_tr2, neg_features_tr2], labels = ['pos feats with reg', 'neg feats with reg', 'pos feats without reg', 'neg feats without reg'], showfliers=True)
+        plt.savefig('box_plot_with_and_without_feat_diff_reg.png')
+        plt.clf()
+            
     #neg_features_tr = np.array([tracker.metrics['tr_avg_neg_feat'][-1] for tracker in trackers])[:, np.newaxis]
 
     pos_features_te = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['te_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_te[i] == 1)])[:, np.newaxis]
     neg_features_te = np.array([np.log10(np.exp(feature)) for i, feature in enumerate(trackers[-1].metrics['te_features'][0][:, 0].detach().numpy()) if bool(trackers[-1].data_input.y_tr[i] == 0)])[:, np.newaxis]
     print(pos_features_tr.shape, neg_features_tr.shape)
     #neg_features_tr = np.array([tracker.metrics['tr_avg_neg_feat'][-1] for tracker in trackers])[:, np.newaxis]
-    plt.boxplot([pos_features_tr, neg_features_tr], showfliers=False, labels=['Positive Log-Features Train', 'Negative Log-Features Train'])
+    plt.boxplot([np.log(np.power(10, pos_features_tr)), np.log(np.power(10, neg_features_tr))], showfliers=False, labels=['Positive Log-Features Train', 'Negative Log-Features Train'])
     plt.savefig('feat_boxplot_gate_one_tr.png')
 
     plt.clf()
@@ -56,6 +67,8 @@ def simple_diagnostics_plot(trackers_path):
     plt.boxplot([pos_features_te2, neg_features_te2], showfliers=False, labels=['Positive Log-Features Test', 'Negative Log-Features Test'])
     plt.savefig('feat_boxplot_gate_two_te.png')
     plt.clf()
+
+
 def update_last_tracker_to_have_features_at_convergence(trackers):
     last_tracker = trackers[-1]
     last_tracker.metric_names.append('tr_features')
@@ -194,13 +207,59 @@ def get_avg_feats_one_converged_gate(tracker, split):
     avg_neg_feat = tracker.metrics[neg_metric_name][-1]
     return float(avg_pos_feat), float(avg_neg_feat)
 
-    
+def plot_feat_diff_reg_per_iteration_single_tracker(tracker):
+    feat_diff_results = tracker.metrics['tr_reg_feat_diff']
+    plt.plot(tracker.epochs, feat_diff_results)
+    plt.savefig('feat_diff_plot.png')
+    plt.clf()
+
+def plot_feat_diff_reg_per_sample(tracker):
+    feat_diff_results = tracker.metrics['tr_feat_diff_reg_per_sample'][-1]
+    results_to_plot = [result[0] for result in feat_diff_results]
+    print(results_to_plot)
+    plt.plot(np.arange(len(results_to_plot)), results_to_plot)
+    plt.savefig('feat_diff_per_sample.png')
+    plt.clf()
+
+def plot_old_model_features_next_to_current_ones(cur_tracker, cur_tracker_reg, old_feats_path):
+    old_feats_tr = np.loadtxt(old_feats_path, delimiter=',')[0:34] #first 34 are dev
+    cur_feats_tr = cur_tracker.metrics['tr_features'][-1][:, 0].detach().numpy()
+    cur_feats_tr_reg = cur_tracker_reg.metrics['tr_features'][-1][:, 0].detach().numpy()
+
+    pos_old_feats = np.log10(old_feats_tr[old_feats_tr[:, -1] == 1])[:, 0]
+    pos_cur_feats_tr = [np.log10(np.exp(cur_feat)) for i, cur_feat in enumerate(cur_feats_tr) if bool(cur_tracker.data_input.y_tr[i] == 1)]
+    pos_cur_feats_tr_reg = [np.log10(np.exp(cur_feat)) for i, cur_feat in enumerate(cur_feats_tr_reg) if bool(cur_tracker_reg.data_input.y_tr[i] == 1)]
+
+    neg_old_feats = np.log10(old_feats_tr[old_feats_tr[:, -1] == 0])[:, 0]
+    print(neg_old_feats)
+    neg_cur_feats_tr = [np.log10(np.exp(cur_feat)) for i, cur_feat in enumerate(cur_feats_tr) if bool(cur_tracker.data_input.y_tr[i] == 0)]
+    neg_cur_feats_tr_reg = [np.log10(np.exp(cur_feat)) for i, cur_feat in enumerate(cur_feats_tr_reg) if bool(cur_tracker_reg.data_input.y_tr[i] == 0)]
+
+    #add with reg here as well
+    plt.boxplot([pos_cur_feats_tr, neg_cur_feats_tr, pos_cur_feats_tr_reg, neg_cur_feats_tr_reg, pos_old_feats, neg_old_feats], labels=['+ feats cur', '- feats cur', '+ feats cur reg', '- feats cur reg', '+ feats old', '- feats old'], showfliers=False)
+    plt.savefig('cur_feats_with_and_without_reg_vs_old_results.png')
+    plt.clf()
+
+
 
 if __name__ == '__main__':
-    #trackers_dir = '../output/one_by_one_clustering_with_loss_heuristic_final_version/trackers.pkl' #'../output/boxplot_testing/trackers.pkl'
-    trackers_dir = '../output/default_umap/trackers.pkl'
-    simple_diagnostics_plot(trackers_dir)
+    trackers_dir2 = '../output/one_by_one_clustering_with_loss_heuristic_final_version/trackers.pkl' 
+    trackers_dir = '../output/umap_with_feat_diff/trackers.pkl'
+    with open(trackers_dir, 'rb') as f:
+        trackers = pickle.load(f)
+    with open(trackers_dir2, 'rb') as f:
+        trackers2 = pickle.load(f)
+    update_last_tracker_to_have_features_at_convergence(trackers)
+    update_last_tracker_to_have_features_at_convergence(trackers2)
 
+
+    plot_feat_diff_reg_per_iteration_single_tracker(trackers[-1])
+    #trackers_dir = '../output/default_umap/trackers.pkl'
+    #trackers_dir = '../output/testing_using_labels_with_transform/trackers.pkl'
+    simple_diagnostics_plot(trackers_dir, trackers_path2=trackers_dir2)
+    plot_feat_diff_reg_per_sample(trackers[-1])    
+
+    plot_old_model_features_next_to_current_ones(trackers2[-1], trackers[-1], './all_feats_from_paper.csv')
     #trackers_per_run_dir = '../output/eval_grid_final_run/trackers_per_run.pkl'
     #with open(trackers_per_run_dir, 'rb') as f:
     #    trackers_per_run = pickle.load(f)
