@@ -30,9 +30,11 @@ def test_plot(path_to_params):
 
     path_to_model = os.path.join(params['save_dir'], 'model.pkl')
     path_to_umapper = os.path.join(params['save_dir'], 'transformer.pkl')
-    model = load_saved_model(path_to_model, params['model_params'])
+    model = load_saved_model(path_to_model, params['model_params'], embed_dim=params['transform_params']['embed_dim'])
     umapper = load_umapper(path_to_umapper)
 
+    # debug
+    #params['transform_params']['cells_to_subsample'] = 2
     data_input.embed_data(\
         umapper,
         cells_to_subsample=params['transform_params']['cells_to_subsample'],
@@ -75,10 +77,10 @@ def load_umapper(path_to_umapper):
         umapper = pickle.load(f)
     return umapper
 
-def load_saved_model(path_to_model, model_params):
+def load_saved_model(path_to_model, model_params, embed_dim=2):
     with open(path_to_model, 'rb') as f:
         state_dict = torch.load(f)
-    model = DepthOneModel(GateInitializerClustering.get_fake_init_gates(5), model_params)
+    model = DepthOneModel(GateInitializerClustering.get_fake_init_gates(embed_dim, 1), model_params)
     model.load_state_dict(state_dict)
     return model
 
@@ -109,11 +111,11 @@ def load_results(trained_model_path, params_path, trained_umapper_path, trackers
     return trained_model, trained_umapper, data_input
 
 if __name__ == '__main__':
-    path_to_params = '../output/umap_with_feat_diff/params.pkl'
+    #path_to_params = '../output/umap_with_feat_diff/params.pkl'
 #    test_plot(path_to_params)
 
-    path_to_model = '../output/umap_with_feat_diff/model.pkl'
-    path_to_umapper = '../output/umap_with_feat_diff/transformer.pkl'
-    path_to_trackers = '../output/umap_with_feat_diff/trackers.pkl'
+    #path_to_model = '../output/umap_current_without_feat_diff_plot_testing/model.pkl'
+    #path_to_umapper = '../output/umap_current_without_feat_diff_plot_testing/transformer.pkl'
+    #path_to_trackers = '../output/umap_with_feat_diff_plot_testing/trackers.pkl'
     #make_ori_features_plot(path_to_model, path_to_params, path_to_umapper, path_to_trackers, savename='ori_plot_with_feat_diff_reg.png')
-    test_plot('../configs/umap_with_feat_diff_reg.yaml')
+    test_plot('../configs/umap_3d.yaml')

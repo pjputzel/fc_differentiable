@@ -2,7 +2,7 @@ from __future__ import division
 from collections import namedtuple
 
 from math import *
-
+import math as math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -123,6 +123,20 @@ class ModelNode(nn.Module):
             self.gate_upp2_param = nn.Parameter(
                 torch.tensor(self.__log_odds_ratio__(init_tree.gate.gate_upp2), dtype=torch.float32))
 
+    @staticmethod
+    def load_tree_into_gate(tree):
+        low1 = tree.gate.gate_low1
+        low2 = tree.gate.gate_low2
+        upp1 = tree.gate.gate_upp1
+        upp2 = tree.gate.gate_upp2
+
+        gate = namedtuple('gate', ['low1', 'upp1', 'low2', 'upp2'])
+        gate.low1 = low1
+        gate.low2 = low2
+        gate.upp1 = upp1
+        gate.upp2 = upp2
+        return gate
+
     def __log_odds_ratio__(self, p):
         """
         return log(p/1-p)
@@ -156,6 +170,9 @@ class ModelNode(nn.Module):
             if torch.cuda.is_available():
                 grad.cuda()
         return torch.autograd.Variable(grad)
+    
+    def print_grad(self, grad):
+        print(grad)
 
     def forward(self, x):
         """
@@ -172,6 +189,10 @@ class ModelNode(nn.Module):
         gate_low2 = F.sigmoid(self.gate_low2_param)
         gate_upp1 = F.sigmoid(self.gate_upp1_param)
         gate_upp2 = F.sigmoid(self.gate_upp2_param)
+
+        gate_low1.register_hook(self.print_grad)
+        gate_low2.register_hook(self.print_grad)
+
 
         logp = F.logsigmoid(self.logistic_k * ((x[:, self.gate_dim1] - gate_low1))) \
                + F.logsigmoid(- self.logistic_k * ((x[:, self.gate_dim1] - gate_upp1))) \
@@ -196,6 +217,13 @@ class ModelNode(nn.Module):
                                                                  (1 - gate_upp1) ** 2 + gate_low2 ** 2,
                                                                  (1 - gate_upp1) ** 2 + (1 - gate_upp2) ** 2], dim=0)))
         return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
+
+    def get_gate(self):
+        gate_low1_param = F.sigmoid(self.gate_low1_param)
+        gate_low2_param = F.sigmoid(self.gate_low2_param)
+        gate_upp1_param = F.sigmoid(self.gate_upp1_param)
+        gate_upp2_param = F.sigmoid(self.gate_upp2_param)
+        return [gate_low1_param.item(), gate_upp1_param.item(), gate_low2_param.item(), gate_upp2_param.item()]
 
 class SquareModelNode(ModelNode):
     def __init__(self, logistic_k, reference_tree, init_tree=None, gate_size_default=(1./4, 1./4), is_root=False, panel='both'):
@@ -389,6 +417,710 @@ class SquareModelNode(ModelNode):
         )
 
 
+class CircularModelNode(ModelNode):
+    def __init__(self, logistic_k, init_tree, gate_size_default=(1./4, 1./4), is_root=False, panel='both', gate_dim1='D1', gate_dim2='D2'):
+        super(ModelNode, self).__init__()
+        self.logistic_k = logistic_k
+        self.gate_dim1 = gate_dim1
+        self.gate_dim2 = gate_dim2
+        self.gate_size_default = gate_size_default
+        self.is_root = is_root
+        self.panel = panel
+
+
+        self.init_gate_params(init_tree)
+        self.init_tree = init_tree
+
+
+
+
+    def init_gate_params(self, tree):
+        # first make the gate circular
+        # note that the gate here will have negative values
+        # reminder: the tree gates are normalized to 0,1 at this point
+        print('tree is', tree)
+        x_dist = tree[0][2] - tree[0][1]
+        y_dist = tree[1][2] - tree[1][1]
+        tree = [
+            tree[0][0] + tree[1][0],
+            [tree[0][1] + x_dist/2, tree[1][1] + y_dist/2],
+            (x_dist/2 + y_dist/2)/2 
+        ]
+        print('after circularizing:', tree)
+    
+        center = tree[1]
+        radius = tree[2]
+
+        self.center1_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[0]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        self.center2_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[1]
+                ), 
+                dtype=torch.float32
+            )
+        )
+
+
+        self.radius_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(radius), 
+                dtype=torch.float32
+                )
+        )
+
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = torch.tensor([0.])
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
+
+    def forward(self, x):
+        """
+        compute the log probability that each cell passes the gate
+        :param x: (n_cell, n_cell_features)
+        :return: (logp, reg_penalty)
+        """
+        if self.radius_param.requires_grad:
+            self.radius_param.register_hook(self.replace_nans_with_0)
+        if self.center1_param.requires_grad:
+            self.center1_param.register_hook(self.replace_nans_with_0)
+        if self.center1_param.requires_grad:
+            self.center2_param.register_hook(self.replace_nans_with_0)
+
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        radius = F.sigmoid(self.radius_param)
+        
+        logp = self.compute_logp(gate_center1, gate_center2, radius, x)
+
+        # no ref reg since no ref circle
+        # this regularizations aren't really being used in the code
+        # TODO: clean up these uneeded regularizations
+        ref_reg_penalty = 0
+        init_reg_penalty = 0
+        size_reg_penalty = 0
+        corner_reg_penalty = 0
+
+        return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
+
+
+    def compute_logp(self, center1, center2, radius, x):
+        # first compute distance between center and point
+        dist = ( (x[:, 0] - center1)**2 + (x[:, 1] - center2)**2 )**(.5)
+        
+        delta_r = dist - radius
+        return F.logsigmoid(-self.logistic_k * delta_r)
+
+    def get_gate(self):
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        radius = F.sigmoid(self.radius_param)
+        return [[gate_center1, gate_center2], radius]
+
+
+    def __repr__(self):
+        repr_string = ('ModelNode(\n'
+                       '  dims=({dim1}, {dim2}),\n'
+                       '  center=({center1:.4f}, {center2:.4f}),\n'
+                       '  radius={radius:.4f},\n'
+                       '  panel={panel},\n'
+                       ')\n')
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        radius = F.sigmoid(self.radius_param)
+
+        return repr_string.format(
+            dim1=self.gate_dim1,
+            dim2=self.gate_dim2,
+            center1=gate_center1.item(),
+            center2=gate_center2.item(),
+            radius=radius.item(),
+            panel=self.panel
+        )
+
+
+class AxisAlignedEllipticalModelNode(ModelNode):
+    def __init__(self, logistic_k, init_tree, gate_size_default=(1./4, 1./4), is_root=False, panel='both', gate_dim1='D1', gate_dim2='D2'):
+        super(ModelNode, self).__init__()
+        self.logistic_k = logistic_k
+        self.gate_dim1 = gate_dim1
+        self.gate_dim2 = gate_dim2
+        self.gate_size_default = gate_size_default
+        self.is_root = is_root
+        self.panel = panel
+
+
+        self.init_gate_params(init_tree)
+        self.init_tree = init_tree
+
+
+
+
+    def init_gate_params(self, tree):
+        # first make the gate elliptical
+        # note that the gate here will have negative values
+        # reminder: the tree gates are normalized to 0,1 at this point
+        
+        
+
+        print('tree is', tree)
+        x_dist = tree[0][2] - tree[0][1]
+        y_dist = tree[1][2] - tree[1][1]
+
+        #ellipse with same aspect ratio as the initial box passing through the corners of the box
+        tree = [
+            tree[0][0] + tree[1][0],
+            [tree[0][1] + x_dist/2, tree[1][1] + y_dist/2],
+            x_dist/(2**.5), y_dist/(2**.5) 
+        ]
+
+
+        print('after ellipticalizing:', tree)
+    
+        center = tree[1]
+        a = tree[2]
+        b = tree[3]
+
+        self.center1_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[0]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        self.center2_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[1]
+                ), 
+                dtype=torch.float32
+            )
+        )
+
+
+        self.a_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(a), 
+                dtype=torch.float32
+                )
+        )
+
+        self.b_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(b), 
+                dtype=torch.float32
+                )
+        )
+
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = torch.tensor([0.])
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
+
+    def forward(self, x):
+        """
+        compute the log probability that each cell passes the gate
+        :param x: (n_cell, n_cell_features)
+        :return: (logp, reg_penalty)
+        """
+        if self.a_param.requires_grad:
+            self.a_param.register_hook(self.replace_nans_with_0)
+            self.b_param.register_hook(self.replace_nans_with_0)
+        self.center1_param.register_hook(self.replace_nans_with_0)
+        self.center2_param.register_hook(self.replace_nans_with_0)
+        
+
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        a = F.sigmoid(self.a_param)
+        b = F.sigmoid(self.b_param)
+        
+        logp = self.compute_logp(gate_center1, gate_center2, a, b, x)
+
+        # no ref reg since no ref circle
+        # this regularizations aren't really being used in the code
+        # TODO: clean up these uneeded regularizations
+        ref_reg_penalty = 0
+        init_reg_penalty = 0
+        size_reg_penalty = 0
+        corner_reg_penalty = 0
+
+        return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
+
+
+    def compute_logp(self, center1, center2, a, b, x):
+        # first compute distance between center and point
+        distance_to_ellipse_surface = self.compute_dist_to_ellipse(center1, center2, a, b, x)
+        
+        return F.logsigmoid(-self.logistic_k * distance_to_ellipse_surface)
+
+    def compute_dist_to_ellipse(self, center1, center2, a, b, x, eps=1e5):
+        # first find the point of intersection on the ellipse
+        # have to solve a quadratic equation (derived in hand notes)
+        # solve for intersection in coordinate system with ellipse center at origin
+        x_shifted = x - torch.tensor([center1, center2]).reshape(1, 2)
+        slope = (x_shifted[:, 1])/(x_shifted[:, 0])
+        
+
+        # y_intercept is zero in shifted coordinate system
+        # have to compute this way to avoid numerical issues
+        y_intercept = torch.zeros(x_shifted[:, 1].shape)
+        a_quad = a**2 * slope**2 + b**2
+        b_quad = 2 * a**2 * slope * y_intercept
+        c_quad = -a**2 * b **2
+
+
+        x_shifted_solution1 = ( -b_quad + (b_quad**2 - 4 * a_quad * c_quad)**(1/2) )/(2 * a_quad)
+        x_shifted_solution2 = ( -b_quad - (b_quad**2 - 4 * a_quad * c_quad)**(1/2) )/(2 * a_quad)
+        
+
+
+        y_solution1 = slope * x_shifted_solution1 + y_intercept
+        y_solution2 = slope * x_shifted_solution2 + y_intercept
+        
+        dist_to_soln1 = ( (y_solution1)**2 + (x_shifted_solution1)**2 )**(1/2)
+        dist_to_soln2 = ( (y_solution2)**2 + (x_shifted_solution2)**2 )**(1/2)
+
+        # now that we have the two interesecting points on either side of the ellips
+        # we can find the correct point by matching the sign of the change in y for the
+        # point we're evaluating the distance at and the point on the ellipse
+
+        dist_to_center = ( (x_shifted[:, 0] )**2 + (x_shifted[:, 1] )**2 )**(1/2)
+        
+        diffs_if_matching_soln1 = dist_to_center - dist_to_soln1
+        diffs_if_matching_soln2 = dist_to_center - dist_to_soln2
+        
+        dist_to_ellipse_surface_non_vertical = torch.where(
+            torch.sign(y_solution1) == torch.sign(x_shifted[:, 1]), 
+            diffs_if_matching_soln1, diffs_if_matching_soln2
+        )
+
+        # if line is vertical then just use the height of the ellipse 
+        dist_if_vertical_line = dist_to_center - b
+        dist_to_ellipse_surface = torch.where(x_shifted[:, 0] == center1, dist_if_vertical_line, dist_to_ellipse_surface_non_vertical)
+
+        return dist_to_ellipse_surface
+        
+
+
+    def get_gate(self):
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        a = F.sigmoid(self.a_param)
+        b = F.sigmoid(self.b_param)
+        return [[gate_center1, gate_center2], a, b]
+
+
+    def __repr__(self):
+        repr_string = ('ModelNode(\n'
+                       '  dims=({dim1}, {dim2}),\n'
+                       '  center=({center1:.4f}, {center2:.4f}),\n'
+                       '  a={a:.4f},\n'
+                       '  b={b:.4f}, \n'
+                       '  panel={panel},\n'
+                       ')\n')
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        a = F.sigmoid(self.a_param)
+        b = F.sigmoid(self.b_param)
+
+        return repr_string.format(
+            dim1=self.gate_dim1,
+            dim2=self.gate_dim2,
+            center1=gate_center1.item(),
+            center2=gate_center2.item(),
+            a=a.item(),
+            b=b.item(),
+            panel=self.panel
+        )
+
+class EllipticalModelNode(ModelNode):
+    def __init__(self, logistic_k, init_tree, gate_size_default=(1./4, 1./4), is_root=False, panel='both', gate_dim1='D1', gate_dim2='D2'):
+        super(ModelNode, self).__init__()
+        self.logistic_k = logistic_k
+        self.gate_dim1 = gate_dim1
+        self.gate_dim2 = gate_dim2
+        self.gate_size_default = gate_size_default
+        self.is_root = is_root
+        self.panel = panel
+
+
+        self.init_gate_params(init_tree)
+        self.init_tree = init_tree
+
+
+
+
+    def init_gate_params(self, tree):
+        # first make the gate elliptical
+        # note that the gate here will have negative values
+        # reminder: the tree gates are normalized to 0,1 at this point
+        
+        
+
+        print('tree is', tree)
+        x_dist = tree[0][2] - tree[0][1]
+        y_dist = tree[1][2] - tree[1][1]
+
+        # ellipse with same aspect ratio as the initial box passing through the corners of the box
+        # set initial angle to pi instead of zero to avoid bad initializations of theta
+        tree = [
+            tree[0][0] + tree[1][0],
+            [tree[0][1] + x_dist/2, tree[1][1] + y_dist/2],
+            x_dist/(2**.5), y_dist/(2**.5), math.pi
+        ]
+
+
+        print('after ellipticalizing:', tree)
+    
+        center = tree[1]
+        a = tree[2]
+        b = tree[3]
+        theta = tree[4]
+
+        self.center1_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[0]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        self.center2_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[1]
+                ), 
+                dtype=torch.float32
+            )
+        )
+
+
+        self.a_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(a), 
+                dtype=torch.float32
+                )
+        )
+
+        self.b_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(b), 
+                dtype=torch.float32
+                )
+        )
+
+        self.theta_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(theta/(2 * math.pi)), 
+                dtype=torch.float32
+                )
+        )
+
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = torch.tensor([0.])
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
+
+    def forward(self, x):
+        """
+        compute the log probability that each cell passes the gate
+        :param x: (n_cell, n_cell_features)
+        :return: (logp, reg_penalty)
+        """
+        if self.a_param.requires_grad:
+            self.a_param.register_hook(self.replace_nans_with_0)
+            self.b_param.register_hook(self.replace_nans_with_0)
+        self.center1_param.register_hook(self.replace_nans_with_0)
+        self.center2_param.register_hook(self.replace_nans_with_0)
+        self.theta_param.register_hook(self.replace_nans_with_0)
+
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        a = F.sigmoid(self.a_param)
+        b = F.sigmoid(self.b_param)
+        theta = 2 * math.pi * F.sigmoid(self.theta_param)
+        
+        logp = self.compute_logp(gate_center1, gate_center2, a, b, theta, x)
+
+        # no ref reg since no ref circle
+        # this regularizations aren't really being used in the code
+        # TODO: clean up these uneeded regularizations
+        ref_reg_penalty = 0
+        init_reg_penalty = 0
+        size_reg_penalty = 0
+        corner_reg_penalty = 0
+
+        return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
+
+
+    def compute_logp(self, center1, center2, a, b, theta, x):
+        # first compute distance between center and point
+        distance_to_ellipse_surface = self.compute_dist_to_ellipse(center1, center2, a, b, theta, x)
+        
+        return F.logsigmoid(-self.logistic_k * distance_to_ellipse_surface)
+
+    def compute_dist_to_ellipse(self, center1, center2, a, b, theta, x, eps=1e5):
+        # first find the point of intersection on the ellipse
+        # have to solve a quadratic equation (derived in hand notes)
+        # solve for intersection in coordinate system with ellipse center at origin
+        # also rotate by -theta to do make the ellipse axis aligned for easy computation
+        # this is ok since distances are in invariant to shifts and rotations
+        x_shifted = x - torch.tensor([center1, center2]).reshape(1, 2)
+        x_shifted_and_rotated = torch.cat(
+            [
+                (x_shifted[:, 0] * torch.cos(-theta) - x_shifted[:, 1] * torch.sin(-theta)).unsqueeze(1),
+                (x_shifted[:, 0] * torch.sin(-theta) + x_shifted[:, 1] * torch.cos(-theta)).unsqueeze(1)
+            ],
+            dim=1
+        )
+        
+
+        slope = (x_shifted_and_rotated[:, 1])/(x_shifted_and_rotated[:, 0])
+        
+
+        # y_intercept is zero in shifted coordinate system
+        # have to compute this way to avoid numerical issues
+        y_intercept = torch.zeros(x_shifted_and_rotated[:, 1].shape)
+        a_quad = a**2 * slope**2 + b**2
+        b_quad = 2 * a**2 * slope * y_intercept
+        c_quad = -a**2 * b **2
+
+
+        x_shifted_and_rotated_solution1 = ( -b_quad + (b_quad**2 - 4 * a_quad * c_quad)**(1/2) )/(2 * a_quad)
+        x_shifted_and_rotated_solution2 = ( -b_quad - (b_quad**2 - 4 * a_quad * c_quad)**(1/2) )/(2 * a_quad)
+        
+
+
+        y_solution1 = slope * x_shifted_and_rotated_solution1 + y_intercept
+        y_solution2 = slope * x_shifted_and_rotated_solution2 + y_intercept
+        
+        dist_to_soln1 = ( (y_solution1)**2 + (x_shifted_and_rotated_solution1)**2 )**(1/2)
+        dist_to_soln2 = ( (y_solution2)**2 + (x_shifted_and_rotated_solution2)**2 )**(1/2)
+
+        # now that we have the two interesecting points on either side of the ellips
+        # we can find the correct point by matching the sign of the change in y for the
+        # point we're evaluating the distance at and the point on the ellipse
+
+        dist_to_center = ( (x_shifted_and_rotated[:, 0] )**2 + (x_shifted_and_rotated[:, 1] )**2 )**(1/2)
+        
+        diffs_if_matching_soln1 = dist_to_center - dist_to_soln1
+        diffs_if_matching_soln2 = dist_to_center - dist_to_soln2
+        
+        dist_to_ellipse_surface_non_vertical = torch.where(
+            torch.sign(y_solution1) == torch.sign(x_shifted_and_rotated[:, 1]), 
+            diffs_if_matching_soln1, diffs_if_matching_soln2
+        )
+
+        # if line is vertical then just use the height of the ellipse 
+        dist_if_vertical_line = dist_to_center - b
+        dist_to_ellipse_surface = torch.where(x_shifted_and_rotated[:, 0] == 0, dist_if_vertical_line, dist_to_ellipse_surface_non_vertical)
+
+        return dist_to_ellipse_surface
+        
+
+
+    def get_gate(self):
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        a = F.sigmoid(self.a_param)
+        b = F.sigmoid(self.b_param)
+        theta = 2 * math.pi * F.sigmoid(self.theta_param)
+        return [[gate_center1, gate_center2], a, b, theta]
+
+
+    def __repr__(self):
+        repr_string = ('ModelNode(\n'
+                       '  dims=({dim1}, {dim2}),\n'
+                       '  center=({center1:.4f}, {center2:.4f}),\n'
+                       '  a={a:.4f},\n'
+                       '  b={b:.4f}, \n'
+                       '  theta={theta:.4f}, \n'
+                       '  panel={panel},\n'
+                       ')\n')
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        a = F.sigmoid(self.a_param)
+        b = F.sigmoid(self.b_param)
+        theta = 2 * math.pi * F.sigmoid(self.theta_param)
+        return repr_string.format(
+            dim1=self.gate_dim1,
+            dim2=self.gate_dim2,
+            center1=gate_center1.item(),
+            center2=gate_center2.item(),
+            a=a.item(),
+            b=b.item(),
+            theta=theta.item(),
+            panel=self.panel
+        )
+
+class SphericalModelNode(ModelNode):
+    def __init__(self, logistic_k, init_tree, gate_size_default=(1./4, 1./4), is_root=False, panel='both', gate_dim1='D1', gate_dim2='D2', gate_dim3='D3'):
+        super(ModelNode, self).__init__()
+        self.logistic_k = logistic_k
+        self.gate_dim1 = gate_dim1
+        self.gate_dim2 = gate_dim2
+        self.gate_dim3 = gate_dim3
+        self.gate_size_default = gate_size_default
+        self.is_root = is_root
+        self.panel = panel
+
+
+        self.init_gate_params(init_tree)
+        self.init_tree = init_tree
+
+
+
+
+    def init_gate_params(self, tree):
+        # first make the gate spherical
+        # reminder: the tree gates are normalized to 0,1 at this point
+        
+        
+
+        print('tree is', tree)
+        x_dist = tree[0][2] - tree[0][1]
+        y_dist = tree[1][2] - tree[1][1]
+        z_dist = tree[2][2] - tree[2][1]
+
+        tree = [
+            [tree[0][1] + x_dist/2, tree[1][1] + y_dist/2, tree[2][1] + z_dist/2],
+            (x_dist/2 + y_dist/2 + z_dist/2)/3
+        ]
+
+
+        print('after sphericalizing:', tree)
+    
+        center = tree[0]
+        radius = tree[1]
+
+        self.center1_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[0]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        self.center2_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[1]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        self.center3_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[2]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        self.radius_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    radius
+                ), 
+                dtype=torch.float32
+            )
+        )
+
+
+
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = torch.tensor([0.])
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
+
+    def forward(self, x):
+        """
+        compute the log probability that each cell passes the gate
+        :param x: (n_cell, n_cell_features)
+        :return: (logp, reg_penalty)
+        """
+        if self.radius_param.requires_grad:
+            self.radius_param.register_hook(self.replace_nans_with_0)
+        self.center1_param.register_hook(self.replace_nans_with_0)
+        self.center2_param.register_hook(self.replace_nans_with_0)
+        self.center3_param.register_hook(self.replace_nans_with_0)
+
+        
+
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        gate_center3 = F.sigmoid(self.center3_param)
+        radius = F.sigmoid(self.radius_param)
+        
+        logp = self.compute_logp(gate_center1, gate_center2, gate_center3, radius, x)
+
+        # no ref reg since no ref circle
+        # this regularizations aren't really being used in the code
+        # TODO: clean up these uneeded regularizations
+        ref_reg_penalty = 0
+        init_reg_penalty = 0
+        size_reg_penalty = 0
+        corner_reg_penalty = 0
+
+        return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
+
+
+    def compute_logp(self, center1, center2, center3, radius, x):
+        distance_to_sphere = ((x[:, 0] - center1)**2 + (x[:, 1] - center2)**2 + (x[:, 2] - center3)**2)**(.5)
+        
+        return F.logsigmoid(-self.logistic_k * distance_to_sphere)
+
+
+
+    def get_gate(self):
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        gate_center3 = F.sigmoid(self.center3_param)
+        radius = F.sigmoid(self.radius)
+        return [[gate_center1, gate_center2, gate_center3], radius]
+
+
+    def __repr__(self):
+        repr_string = ('ModelNode(\n'
+                       '  dims=({dim1}, {dim2}, {dim3}),\n'
+                       '  center=({center1:.4f}, {center2:.4f}, {center3:.4f}),\n'
+                       '  radius={radius:.4f},\n'
+                       ')\n')
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        gate_center3 = F.sigmoid(self.center3_param)
+        radius = F.sigmoid(self.radius_param)
+        return repr_string.format(
+            dim1=self.gate_dim1,
+            dim2=self.gate_dim2,
+            dim3=self.gate_dim3,
+            center1=gate_center1.item(),
+            center2=gate_center2.item(),
+            center3=gate_center3.item(),
+            radius=radius.item()
+        )
+
 class ModelTree(nn.Module):
 
     def __init__(self, reference_tree,
@@ -467,6 +1199,32 @@ class ModelTree(nn.Module):
                             (F.sigmoid(node.center2_param) -  F.sigmoid(node.side_length_param)/2.),
                             0., 1.
                         ).cpu().detach().numpy()
+        elif type(node).__name__ == 'CircularModelNode':
+            radius = F.sigmoid(node.radius_param)
+            center1 = F.sigmoid(node.center1_param)
+            center2 = F.sigmoid(node.center2_param)
+            return [[center1, center2], radius]
+        elif type(node).__name__ == 'AxisAlignedEllipticalModelNode': 
+            a = F.sigmoid(node.a_param)
+            b = F.sigmoid(node.b_param) 
+            center1 = F.sigmoid(node.center1_param)
+            center2 = F.sigmoid(node.center2_param)
+            return [[center1, center2], a, b]
+        elif type(node).__name__ == 'EllipticalModelNode': 
+            a = F.sigmoid(node.a_param)
+            b = F.sigmoid(node.b_param)
+            theta = 2 * math.pi * F.sigmoid(node.theta_param)
+            center1 = F.sigmoid(node.center1_param)
+            center2 = F.sigmoid(node.center2_param)
+            return [[center1, center2], a, b, theta]
+        
+        elif type(node).__name__ == 'SphericalModelNode':
+            center1 = F.sigmoid(node.center1_param)
+            center2 = F.sigmoid(node.center2_param)
+            center3 = F.sigmoid(node.center3_param)
+            radius = F.sigmoid(node.radius_param)
+            return [[center1, center2, center3], radius]
+
         else:
             gate_low1 = node.gate_low1_param.cpu().detach().numpy()
             gate_low2 = node.gate_low2_param.cpu().detach().numpy()

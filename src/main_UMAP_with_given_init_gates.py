@@ -58,7 +58,11 @@ def main(params):
         unused_cluster_gate_inits = init_plot_and_save_gates(data_input, params)
     #everything below differs from the other main_UMAP
     data_input.convert_all_data_to_tensors()
-    init_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=None)
+    # Using a fixed init here:
+    init_gate_tree = [['D1', 0., .2], ['D2', .6, .8]]
+    unusued_cluster_gate_inits = []
+    # unused for fix init
+#    init_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=None)
     model = initialize_model(params['model_params'], [init_gate_tree])
     trackers_per_round = []
     num_gates_left = len(unused_cluster_gate_inits)
@@ -219,7 +223,7 @@ def get_next_gate_tree_by_log_loss(unused_gate_trees, data_input, params, model=
 
 if __name__ == '__main__':
 
-#    path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
+    path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
 
 #    path_to_params = '../configs/umap_semi_synth.yaml'
 #    path_to_params = '../configs/umap_circular.yaml'
@@ -231,6 +235,6 @@ if __name__ == '__main__':
 #    path_to_params = '../configs/umap_elliptical.yaml'
 #    path_to_params = '../configs/umap_with_presplit.yaml'
 
-    path_to_params = '../configs/umap_BALL.yaml'
+#    path_to_params = '../configs/umap_BALL.yaml'
     main_with_path(path_to_params)    
 

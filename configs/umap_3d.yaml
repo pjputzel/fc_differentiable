@@ -1,8 +1,7 @@
-
-save_dir: '../output/umap_with_feat_diff_newest/'
+save_dir: '../output/umap_3d/'
 
 model_params:
-    node_type: 'square'
+    node_type: 'spherical'
     feature_diff_penalty: .0010
 
 data_params:
@@ -14,7 +13,8 @@ data_params:
 transform_params:
     cells_to_subsample: 10000
     num_cells_for_transformer: 100000
-    transform_type: 'umap' 
+    transform_type: 'umap'
+    embed_dim: 3 
 
 gate_init_cluster_params:
     n_clusters: 5
@@ -28,6 +28,3 @@ train_params:
     l1_reg_strength: .00
     descent_type: 'coordinate_descent'
     num_gates_to_learn: 1
-    
-
-

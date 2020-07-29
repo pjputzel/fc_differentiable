@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 #TODO: add code for heuristic as well
 
 class GateInitializerClustering:
-    def __init__(self, x_tr, gate_init_params):
+    def __init__(self, x_tr, gate_init_params, n_dims=2):
         self.gate_init_params = gate_init_params
         self.x_tr = x_tr
+        self.n_dims = n_dims
     
     @staticmethod
     # for loading a saved model state_dict use these
@@ -18,15 +19,26 @@ class GateInitializerClustering:
     # state dict to get the correct gate params
     # also can be used for debugging other parts
     # of the data pipeline
-    def get_fake_init_gates(num_gates):
-        fake_gates = []
-        for g in range(num_gates):
-            fake_gates.append(
-                [   
-                    ['D1', 0., 0.],
-                    ['D2', 0., 0.]   
-                ]
-            )
+    def get_fake_init_gates(n_dims, num_gates):
+        if n_dims == 2:
+            fake_gates = []
+            for g in range(num_gates):
+                fake_gates.append(
+                    [   
+                        ['D1', 0., 0.],
+                        ['D2', 0., 0.]   
+                    ]
+                )
+        else:
+            fake_gates = []
+            for g in range(num_gates):
+                fake_gates.append(
+                    [   
+                        ['D1', 0., 0.],
+                        ['D2', 0., 0.],
+                        ['D3', 0., 0.]
+                    ]
+                )
         return fake_gates
                 
 
@@ -49,6 +61,7 @@ class GateInitializerClustering:
 
         else:
             cluster_memberships_tr = kmeans.fit_predict(self.catted_x_tr)
+            self.kmeans = kmeans
 #        cluster_memberships_tr = kmeans.predict(self.catted_x_tr) 
         self.cluster_memberships_tr = cluster_memberships_tr
     
@@ -71,6 +84,7 @@ class GateInitializerClustering:
         idxs_big_enough_density = np.where(density_estimate > self.gate_init_params['density_threshold_percent_for_kmeans'] * avg_density)
         data_for_kmeans = grid_for_kde[idxs_big_enough_density]
         kmeans.fit(data_for_kmeans)
+        self.kmeans = kmeans
         return kmeans.predict(self.catted_x_tr)
 
     def get_grid_for_kde(self):
@@ -82,18 +96,30 @@ class GateInitializerClustering:
         cluster_data = self.catted_x_tr[self.cluster_memberships_tr == cluster]
         sorted_x = np.sort(cluster_data[:, 0])
         sorted_y = np.sort(cluster_data[:, 1])
+        if self.n_dims == 3:
+            sorted_z = np.sort(cluster_data[:, 2])
         low_idx = int(percentile_low * cluster_data.shape[0])
         high_idx = int(percentile_high * cluster_data.shape[0])
-        gate = [sorted_x[low_idx], sorted_x[high_idx], 
-                sorted_y[low_idx], sorted_y[high_idx]]
+        if self.n_dims == 2:
+            gate = [sorted_x[low_idx], sorted_x[high_idx], 
+                    sorted_y[low_idx], sorted_y[high_idx]]
+        else:
+            gate = [sorted_x[low_idx], sorted_x[high_idx], 
+                    sorted_y[low_idx], sorted_y[high_idx],
+                    sorted_z[low_idx], sorted_z[high_idx]]
         return gate
 
     def construct_init_gate_tree(self):
         self.init_gate_tree = []
         for gate in self.init_gates:
-            self.init_gate_tree.append(
-                [[u'D1', gate[0], gate[1]], [u'D2', gate[2], gate[3]]]
-            )
+            if self.n_dims == 2:
+                self.init_gate_tree.append(
+                    [[u'D1', gate[0], gate[1]], [u'D2', gate[2], gate[3]]]
+                )
+            else:
+                self.init_gate_tree.append(
+                    [[u'D1', gate[0], gate[1]], [u'D2', gate[2], gate[3]], [u'D3', gate[4], gate[5]]]
+                )
         return self.init_gate_tree
 
 

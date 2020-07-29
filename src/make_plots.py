@@ -15,12 +15,17 @@ import torch
 from math import *
 import utils.utils_load_data as dh
 from utils.input import *
+from expand_learned_cell_population import KDEGateExpander
 from utils.utils_plot import run_leaf_gate_plots
 from utils.utils_plot import run_gate_motion_from_saved_results
 from utils.utils_plot import *
 from utils.utils_plot_synth import *
 from make_UMAP_embeddings import *
 import yaml
+
+
+from utils.DataInput import DataInput
+from utils.DataAndGatesPlotter import DataAndGatesPlotterDepthOne
 
 default_hparams = {
     'logistic_k': 100,
@@ -203,6 +208,213 @@ def make_umap_plot_and_embed_samples(umapper_path, data_path, labels_path):
         umapper = pickle.load(f)
     embeddings_with_labels = np.concatenate(embed_samples_with_labels(umapper, data, labels))
     make_umap_plot(embeddings_with_labels)
+
+
+def set_random_seeds(params):
+    torch.manual_seed(params['random_seed'])
+    np.random.seed(params['random_seed'])
+
+def make_umap_plots_for_incorrect_and_correct_samples(
+    results_path, plot_expanded_data=True, path_to_true_features=None,
+    BALL=False):
+    with open(os.path.join(results_path, 'configs.pkl'), 'rb') as f:
+        params = pickle.load(f)
+
+    with open(os.path.join(results_path, 'transformer.pkl'), 'rb') as f:
+        umapper = pickle.load(f)
+
+    sample_names_to_true_features = None
+    if path_to_true_features:
+        with open(path_to_true_features, 'rb') as f:
+            sample_names_to_true_features = pickle.load(f)
+
+    set_random_seeds(params)    
+
+    model = DepthOneModel([[['D1', 0, 0], ['D2', 0, 0]]], params['model_params'])
+    model.load_state_dict(torch.load(os.path.join(results_path, 'model.pkl')))
+    try: 
+        print(params['data_params']['use_presplit_data'])
+    except:
+        params['data_params']['use_presplit_data'] = False
+    data_input = DataInput(params['data_params'])
+    # splitting because codebase requires a split currently
+    data_input.split_data()
+    print('embedding data')
+    # only for debuggin
+    #params['transform_params']['cells_to_subsample'] = 2
+    data_input.embed_data(
+        umapper,
+        cells_to_subsample = params['transform_params']['cells_to_subsample'],
+        use_labels_to_transform_data = params['transform_params']['use_labels_to_transform_data']
+    )
+
+    data_input.normalize_data()
+    data_input.convert_all_data_to_tensors()
+
+    # gate expansion using kde
+    if plot_expanded_data:
+        print(model.get_gates()[0])
+        kde_expander = KDEGateExpander(data_input.x_tr, model.get_gates()[0], sigma_thresh_factor=.5)
+        kde_expander.expand_gates()
+        kde_expander.collect_expanded_cells_per_sample()
+        tr_expanded_data = kde_expander.expanded_data_per_sample
+        te_expanded_data = kde_expander.get_expanded_data_new_samples(data_input.x_te)
+    else:
+        tr_expanded_data = None
+        te_expanded_data = None
+    output_tr = model(data_input.x_tr, data_input.y_tr)
+    output_te = model(data_input.x_te, data_input.y_te)
+    matching_tr = [( (output_tr['y_pred'].cpu().detach().numpy() >= .5)[i] * 1.0 == data_input.y_tr[i] ) for i in range(len(data_input.y_tr))]
+    pos_probs_tr = np.array([prob.cpu().detach().numpy() for prob in output_tr['y_pred']])
+    sorted_idxs_tr = np.argsort(pos_probs_tr)
+
+    #correct_idxs_tr = [data_input.idxs_tr[i]  for i in range(len(data_input.y_tr)) if matching_tr[i]]
+    correct_idxs_tr = [data_input.idxs_tr[i]  for i in sorted_idxs_tr if matching_tr[i]]
+
+    correct_idxs_true_pos_tr = [idx for idx in correct_idxs_tr if data_input.y_tr[data_input.idxs_tr.index(idx)] == 1]
+    correct_idxs_true_neg_tr = [idx for idx in correct_idxs_tr if data_input.y_tr[data_input.idxs_tr.index(idx)] == 0]
+
+    #incorrect_idxs_tr = [data_input.idxs_tr[i]  for i in range(len(data_input.y_tr)) if not matching_tr[i]]
+    incorrect_idxs_tr = [data_input.idxs_tr[i]  for i in sorted_idxs_tr if not matching_tr[i]]
+    incorrect_idxs_true_pos_tr = [idx for idx in incorrect_idxs_tr if data_input.y_tr[data_input.idxs_tr.index(idx)] == 1]
+    incorrect_idxs_true_neg_tr = [idx for idx in incorrect_idxs_tr if data_input.y_tr[data_input.idxs_tr.index(idx)] == 0]
+
+
+    print(np.sum(correct_idxs_tr)/len(data_input.x_tr))
+
+    matching_te = [( (output_te['y_pred'].cpu().detach().numpy() >= .5)[i] * 1.0 == data_input.y_te[i] ) for i in range(len(data_input.y_te))]
+    pos_probs_te = np.array([prob.cpu().detach().numpy() for prob in output_te['y_pred']])
+    sorted_idxs_te = np.argsort(pos_probs_te)
+
+    #correct_idxs_te = [data_input.idxs_te[i]  for i in range(len(data_input.y_te)) if matching_te[i]]
+    correct_idxs_te = [data_input.idxs_te[i]  for i in sorted_idxs_te if matching_te[i]]
+    correct_idxs_true_pos_te = [idx for idx in correct_idxs_te if data_input.y_te[data_input.idxs_te.index(idx)] == 1]
+    correct_idxs_true_neg_te = [idx for idx in correct_idxs_te if data_input.y_te[data_input.idxs_te.index(idx)] == 0]
+
+    #incorrect_idxs_te = [data_input.idxs_te[i]  for i in range(len(data_input.y_te)) if not matching_te[i]]
+    incorrect_idxs_te = [data_input.idxs_te[i]  for i in sorted_idxs_te if not matching_te[i]]
+    incorrect_idxs_true_pos_te = [idx for idx in incorrect_idxs_te if data_input.y_te[data_input.idxs_te.index(idx)] == 1]
+    incorrect_idxs_true_neg_te = [idx for idx in incorrect_idxs_te if data_input.y_te[data_input.idxs_te.index(idx)] == 0]
+    print('correct te idxs:', correct_idxs_te, 'incorrect te idxs', incorrect_idxs_te)
+    print(incorrect_idxs_true_neg_te)
+
+
+
+
+    background_data_to_plot_neg = np.concatenate([data for i, data in enumerate(data_input.x_tr)  if data_input.y_tr[i] == 0])
+    try:
+        background_data_to_plot_neg = np.concatenate([background_data_to_plot_neg, np.concatenate([data for i, data in enumerate(data_input.x_te)  if data_input.y_te[i] == 0])])
+    except:
+        pass
+
+
+    background_data_to_plot_pos = np.concatenate([data for i, data in enumerate(data_input.x_tr)  if data_input.y_tr[i]])
+    background_data_to_plot_pos = np.concatenate([background_data_to_plot_pos, np.concatenate([data for i, data in enumerate(data_input.x_te)  if data_input.y_te[i]])])
+
+    full_background_data_to_plot = np.concatenate([background_data_to_plot_pos, background_data_to_plot_neg])
+
+    ### CHANGE SAVENAME IF YOU USE VAL DATA HERE
+    plots_per_row_BALL = 9
+    make_umap_plots_per_sample(model, data_input, incorrect_idxs_true_pos_tr, savename='true_pos_incorrect_dev_tr.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=tr_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+    make_umap_plots_per_sample(model, data_input, incorrect_idxs_true_neg_tr, savename='true_neg_incorrect_dev_tr.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=tr_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+    make_umap_plots_per_sample(model, data_input, correct_idxs_true_pos_tr, savename='true_pos_correct_dev_tr.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=tr_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+    make_umap_plots_per_sample(model, data_input, correct_idxs_true_neg_tr, savename='true_neg_correct_dev_tr.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=tr_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+
+
+    make_umap_plots_per_sample(model, data_input, incorrect_idxs_true_pos_te, savename='true_pos_incorrect_dev_te.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=te_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+    make_umap_plots_per_sample(model, data_input, incorrect_idxs_true_neg_te, savename='true_neg_incorrect_dev_te.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=te_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+    make_umap_plots_per_sample(model, data_input, correct_idxs_true_pos_te, savename='true_pos_correct_dev_te.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=te_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+    make_umap_plots_per_sample(model, data_input, correct_idxs_true_neg_te, savename='true_neg_correct_dev_te.png', plots_per_row=plots_per_row_BALL, background_data_to_plot=full_background_data_to_plot, expanded_data_per_sample=te_expanded_data, sample_names_to_true_features=sample_names_to_true_features, BALL=BALL)
+
+#    make_umap_plots_per_sample(model, data_input, incorrect_idxs_te, savename='all_incorrect_dev_te.png')
+#    make_umap_plots_per_sample(model, data_input, correct_idxs_tr, savename='all_correct_dev_tr.png')
+#    
+#    make_umap_plots_per_sample(model, data_input, correct_idxs_te, savename='all_correct_dev_te.png')
+#
+    
+def make_umap_plots_per_sample(model, data_input, sample_idxs_to_plot, plots_per_row=5, figlen=7, savename='plots_per_sample.png', background_data_to_plot=None, color='b', expanded_data_per_sample=None, sample_names_to_true_features=None, BALL=False):
+
+
+    if len(sample_idxs_to_plot) == 0:
+        print('idxs are empty!')
+        return None
+    vals_to_delete = []
+    for i, idx in enumerate(sample_idxs_to_plot):
+        if not (idx in data_input.sample_names_all):
+            print('Sample %d not in training data' %idx)
+            vals_to_delete.append(idx)
+    for val in vals_to_delete:
+        del sample_idxs_to_plot[sample_idxs_to_plot.index(val)]
+    plotter = DataAndGatesPlotterDepthOne(model, [])
+    idxs_in_data_input = [[1, data_input.idxs_tr.index(idx)] if idx in data_input.idxs_tr else [0, data_input.idxs_te.index(idx)] for idx in sample_idxs_to_plot]
+
+    n_samples_to_plot =  len(sample_idxs_to_plot)
+
+    evenly_divides = not(n_samples_to_plot % plots_per_row)
+    n_rows = n_samples_to_plot//plots_per_row
+    if not(evenly_divides):
+        n_rows += 1
+    
+    print(n_rows, plots_per_row) 
+    fig, axes = plt.subplots(n_rows, plots_per_row, figsize=((figlen) * plots_per_row, (figlen) * n_rows),sharex=True, sharey=True)
+
+    #fig.suptitle('UMAP Embedding and Learned Gates per Sample')
+    
+    
+        
+    axes = [axes] if len(axes.shape) == 1 else axes
+
+    if not (background_data_to_plot is None):
+        for i in range(n_rows):
+            for j in range(plots_per_row):
+                axes[i][j].scatter(
+                    background_data_to_plot[:, 0],
+                    background_data_to_plot[:, 1],
+                    c='lightgrey', s=1/100, alpha=.5 
+                )                      
+
+    axes[0][0].set_xlim(0, 1)
+    axes[0][0].set_ylim(0, 1)
+    fig.tight_layout(pad=1.3)
+    row_start_idx = 0
+    for i, row in enumerate(range(n_rows)):
+        sample_row_idxs = sample_idxs_to_plot[row_start_idx: row_start_idx + plots_per_row]
+        for j, sample_idx in enumerate(sample_row_idxs):
+            cur_axis = axes[i][j]
+            data_input_matching_idx = idxs_in_data_input[row_start_idx + j][1]
+            if idxs_in_data_input[j][0]:
+                sample = data_input.x_tr[data_input_matching_idx]
+                label = data_input.y_tr[data_input_matching_idx]
+            else:
+                sample = data_input.x_te[data_input_matching_idx]
+                label = data_input.y_te[data_input_matching_idx]
+            name = sample_idxs_to_plot[row_start_idx + j]
+            true_feature = None
+            if sample_names_to_true_features:
+                true_feature = sample_names_to_true_features[name]
+            if not BALL:
+                plotter.plot_single_sample_with_gate(
+                    sample, name, label,
+                    cur_axis, size=1, color='b',
+                    true_feature=true_feature
+                )
+            else:
+                plotter.plot_single_sample_with_gate(
+                    sample, name, label,
+                    cur_axis, size=1, color='b',
+                    true_feature=true_feature,
+                    BALL=True
+                )
+            if not (expanded_data_per_sample is None):
+                expanded_data = expanded_data_per_sample[data_input_matching_idx]
+                cur_axis.scatter(expanded_data[:, 0], expanded_data[:, 1], s=1, color='r')
+        row_start_idx += plots_per_row
+
+ 
+    plt.savefig(savename)
+    
+        
+    
     
     
 
@@ -211,11 +423,21 @@ if __name__ == '__main__':
     warnings.filterwarnings("ignore")
     
     ### for plotting a saved per sample umap embedding
-    per_sample_embedding_path = '../output/UMAP_embeddings/Per_Sample_Embeddings_num_neighbors=15_min_dist=0.10.pkl'
-    with open(per_sample_embedding_path, 'rb') as f:
-        per_sample_embeddings = pickle.load(f)
-    print(per_sample_embeddings)
-    make_umap_plot(per_sample_embeddings)
+    #per_sample_embedding_path = '../output/UMAP_embeddings/Per_Sample_Embeddings_num_neighbors=15_min_dist=0.10.pkl'
+    #with open(per_sample_embedding_path, 'rb') as f:
+    #    per_sample_embeddings = pickle.load(f)
+    #print(per_sample_embeddings)
+    #make_umap_plot(per_sample_embedding_path)
+    
+    sample_idxs = [26129, 26127, 26450, 25494, 26099]
+    ### For UMAP combined plot with CLL
+    #path = '../output/umap_with_feat_diff_newest/'
+
+    ### For UMAP combined plot with B-ALL
+    #path = '../output/umap_BALL/'
+    path = '../output/umap_BALL_elliptical'
+    path_to_true_features = '../data/B-ALL/easy_data_sample_names_to_true_features.pkl'
+    make_umap_plots_for_incorrect_and_correct_samples(path, path_to_true_features=path_to_true_features, plot_expanded_data=False, BALL=True)
 
     #for quick umap plot
     #umapper_path= '../output/UMAP_embeddings/num_neighbors=15_min_dist=0.10.pkl_umapper.pkl'

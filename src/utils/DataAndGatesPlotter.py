@@ -1,4 +1,5 @@
 import torch
+import math
 import numpy as np
 from collections import namedtuple
 import utils.utils_load_data as dh
@@ -8,6 +9,7 @@ from utils.bayes_gate import ModelTree
 import seaborn as sb
 import matplotlib.pyplot as plt
 import matplotlib
+from mpl_toolkits.mplot3d import Axes3D
 
 class DataAndGatesPlotter():
 
@@ -62,12 +64,23 @@ class DataAndGatesPlotter():
     '''
     def filter_data_at_single_node(self, data, node, return_idxs=False):
         gate = DataAndGatesPlotter.get_gate(node)
-        return_value = dh.filter_rectangle(
-                data, node.gate_dim1, 
-                node.gate_dim2, gate.low1, gate.upp1, 
-                gate.low2, gate.upp2,
-                return_idx=return_idxs
-        )
+        if type(node).__name__ == 'SquareModelNode':
+            return_value = dh.filter_rectangle(
+                    data, node.gate_dim1, 
+                    node.gate_dim2, gate.low1, gate.upp1, 
+                    gate.low2, gate.upp2,
+                    return_idx=return_idxs
+            )
+        elif type(node).__name__ == 'SphericalModelNode':
+            gate[0] = [center.item() for center in gate[0]]
+            gate[1] = gate[1].item()
+            dist = ( 
+                (data[:, 0] - gate[0][0])**2 +\
+                (data[:, 1] - gate[0][1])**2 +\
+                (data[:, 2] - gate[0][2])**2\
+            )**(1/2)
+
+            return_value = dist <= gate[1]
         
         return return_value
 
@@ -137,8 +150,8 @@ class DataAndGatesPlotter():
     def plot_on_axes(self, axes, hparams):
 
         if not (axes.shape[0] == len(self.filtered_data) - 1):
-            print(self.gates)
-            print(len(self.filtered_data))
+            #print(self.gates)
+            #print(len(self.filtered_data))
             raise ValueError('Number of axes must match the number of nodes!')
 
         for node_idx, axis in enumerate(axes):
@@ -177,8 +190,141 @@ class DataAndGatesPlotter():
             self.plot_gate(axis, node_idx, color='k', label='DAFI')
 
 
-
     def plot_gate(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        if self.model.node_type == 'circular':
+            self.plot_gate_circular(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        elif self.model.node_type == 'axis_aligned_elliptical':
+            self.plot_gate_axis_aligned_elliptical(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        elif self.model.node_type == 'elliptical':
+            self.plot_gate_elliptical(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        elif self.model.node_type == 'spherical':
+            self.plot_gate_spherical(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        else:
+            self.plot_gate_rectangular(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+
+    def plot_gate_return_line(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        if self.model.node_type == 'circular':
+            line = self.plot_gate_return_line_circular(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        elif self.model.node_type == 'axis_aligned_elliptical':
+            line = self.plot_gate_return_line_axis_aligned_elliptical(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        elif self.model.node_type == 'elliptical':
+            line = self.plot_gate_return_line_elliptical(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        elif self.model.node_type == 'spherical':
+            line = self.plot_gate_return_line_spherical(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        else:
+            line = self.plot_gate_return_line_rectangular(axis, node_idx, color=color, lw=lw, dashes=dashes, label=label)
+        return line
+
+    def plot_gate_circular(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        print(gate)
+        circle = plt.Circle(gate[0], gate[1], color=color, fill=False)
+        axis.add_artist(circle)
+
+    def plot_gate_axis_aligned_elliptical(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        
+        center1 = gate[0][0].item()
+        center2 = gate[0][1].item()
+        a = gate[1].item()
+        b = gate[2].item()
+
+        print(gate)
+
+        theta = np.linspace(0, 2*math.pi, 150)
+        plt.plot(center1 + a * np.cos(theta) , center2 + b*np.sin(theta))
+
+
+
+    def plot_gate_elliptical(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        
+        center1 = gate[0][0].item()
+        center2 = gate[0][1].item()
+        a = gate[1].item()
+        b = gate[2].item()
+        theta = gate[3].item()
+
+        print(gate)
+
+        phi = np.linspace(0, 2*math.pi, 150)
+        plt.plot(
+            center1 + a * np.cos(theta) * np.cos(phi) - b * np.sin(theta) * np.sin(phi), 
+            center2 + a * np.cos(phi) * np.sin(theta) + b * np.sin(phi) * np.cos(theta)
+        )
+
+    def plot_gate_spherical(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        center1 = gate[0][0].item()
+        center2 = gate[0][1].item()
+        center3 = gate[0][2].item()
+        radius = gate[1].item()
+
+        theta = np.linspace(0, 2 * np.pi, 100)
+        phi = np.linspace(0, np.pi, 100)
+    
+        x = radius * np.outer(np.cos(theta), np.sin(phi)) + center1
+        y = radius * np.outer(np.sin(theta), np.sin(phi)) + center2
+        z = radius * np.outer(np.ones(np.size(theta)), np.cos(phi)) + center3
+
+        axis.plot_surface(x, y, z, alpha=.3, color='r')
+
+        
+    def plot_gate_return_line_circular(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        circle = plt.Circle(gate[0], gate[1], color=color, fill=False)
+        axis.add_artist(circle)
+        return circle
+
+    def plot_gate_return_line_axis_aligned_elliptical(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        center1 = gate[0][0].item()
+        center2 = gate[0][1].item()
+        a = gate[1].item()
+        b = gate[2].item()
+        print(gate)
+
+        theta = np.linspace(0, 2*math.pi, 150)
+        line, = axis.plot(center1 + a * np.cos(theta) , center2 + b*np.sin(theta))
+        return line
+
+    def plot_gate_return_line_elliptical(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        
+        center1 = gate[0][0].item()
+        center2 = gate[0][1].item()
+        a = gate[1].item()
+        b = gate[2].item()
+        theta = gate[3].item()
+
+        print(gate)
+
+        phi = np.linspace(0, 2*math.pi, 150)
+        line, = axis.plot(
+            center1 + a * np.cos(theta) * np.cos(phi) - b * np.sin(theta) * np.sin(phi), 
+            center2 + a * np.cos(phi) * np.sin(theta) + b * np.sin(phi) * np.cos(theta)
+        )
+        return line
+
+    def plot_gate_return_line_spherical(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+        gate = self.gates[node_idx]
+        center1 = gate[0][0].item()
+        center2 = gate[0][1].item()
+        center3 = gate[0][2].item()
+        radius = gate[1].item()
+
+        theta = np.linspace(0, 2 * np.pi, 100)
+        phi = np.linspace(0, np.pi, 100)
+    
+        x = radius * np.outer(np.cos(theta), np.sin(phi)) + center1
+        y = radius * np.outer(np.sin(theta), np.sin(phi)) + center2
+        z = radius * np.outer(np.ones(np.size(theta)), np.cos(phi)) + center3
+
+        out = axis.plot_surface(x, y, z, alpha=.3, color='r')
+
+        return out
+
+    def plot_gate_rectangular(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
         gate = self.gates[node_idx]
         axis.plot([gate.low1, gate.low1], [gate.low2, gate.upp2], c=color, 
             label=label, dashes=dashes, linewidth=lw)
@@ -190,7 +336,7 @@ class DataAndGatesPlotter():
             dashes=dashes, linewidth=lw)
         return axis
 
-    def plot_gate_return_line(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
+    def plot_gate_return_line_rectangular(self, axis, node_idx, color='g', lw=3, dashes=(None, None), label=None):
         gate = self.gates[node_idx]
         line, = axis.plot([gate.low1, gate.low1], [gate.low2, gate.upp2], c=color, 
             label=label, dashes=dashes, linewidth=lw)
@@ -331,6 +477,14 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         return np.array(np.concatenate([labels[i] * torch.ones([cell_data[i].shape[0], 1]) for i in range(len(cell_data))]))
 
     def plot_data_with_gates(self, cell_labels, size='default', figscale=8):
+        if self.data.shape[1] == 2:
+            fig, axes = self.plot_data_with_gates_2d(cell_labels, size=size, figscale=figscale)
+            return fig, axes
+        else:
+            fig_pos, ax_pos, fig_neg, ax_neg = self.plot_data_with_gates_3d(cell_labels, size=size, figscale=figscale)
+            return fig_pos, ax_pos, fig_neg, ax_neg
+
+    def plot_data_with_gates_2d(self, cell_labels, size='default', figscale=8):
         data_pos = self.data[cell_labels[:, 0] == 1]
         data_neg = self.data[cell_labels[:, 0] == 0]
         if size == 'default':
@@ -339,8 +493,11 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         else:
             size = size
         fig, axes = plt.subplots(2, 1, figsize=(figscale, figscale * 2))
-        axes[0].scatter(data_pos[:, 0], data_pos[:, 1], color='r', s=size)
-        axes[1].scatter(data_neg[:, 0], data_neg[:, 1], color='b', s=size)
+        print(data_pos.shape, size, data_neg.shape, 'data pos shape, size, data_neg shape')
+        axes[0].scatter(data_pos[:, 0], data_pos[:, 1], color='k', s=size)
+        axes[1].scatter(data_neg[:, 0], data_neg[:, 1], color='k', s=size)
+        axes[0].set_title('Positive Cells in UMAP Space')
+        axes[1].set_title('Negative Cells in UMAP Space')
         lines_for_legend = self.plot_all_gates(axes[0]) # -1 was here before???
         pos_feats = self.model(torch.tensor(data_pos.reshape([1, data_pos.shape[0],  -1])), torch.ones([1]))['leaf_logp'][0, :]
         neg_feats = self.model(torch.tensor(data_neg.reshape([1, data_neg.shape[0], -1])), torch.zeros([1]))['leaf_logp'][0, :]
@@ -349,11 +506,84 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         self.plot_all_gates(axes[1])
         
         legend1 = axes[0].legend(loc='upper right')
-        legend2 = axes[0].legend([line for line in lines_for_legend], [str(pos_feat.cpu().detach().numpy()) for pos_feat in pos_feats], loc='lower left')
-        axes[0].add_artist(legend1)
-        axes[1].legend([line for line in lines_for_legend], [str(neg_feat.cpu().detach().numpy()) for neg_feat in neg_feats], loc='lower left')
+        legend2 = axes[0].legend([line for line in lines_for_legend], [str(pos_feat.cpu().detach().numpy()) for pos_feat in pos_feats], loc='lower left', title='Average Pos Feature')
+        #axes[0].add_artist(legend1)
+        axes[1].legend([line for line in lines_for_legend], [str(neg_feat.cpu().detach().numpy()) for neg_feat in neg_feats], loc='lower left', title='Average Neg Feature')
+#        axes[0].legend.title('Average Pos Feature')
+#        axes[1].legend.title('Average Neg Feature')
+        return fig, axes
+
+    def plot_data_with_gates_3d(self, cell_labels, size='default', figscale=8):
+        data_pos = self.data[cell_labels[:, 0] == 1]
+        data_neg = self.data[cell_labels[:, 0] == 0]
+        if size == 'default':
+            # just a heuristic to get a decent marker size
+            size = 1000 * 1/self.data.shape[0]
+        else:
+            size = size
+        fig_pos = plt.figure()
+        ax_pos = fig_pos.add_subplot(111, projection='3d')
+        ax_pos.scatter(data_pos[:, 0], data_pos[:, 1], data_pos[:, 2])
+
+        fig_neg = plt.figure()
+        ax_neg = fig_neg.add_subplot(111, projection='3d')
+        ax_neg.scatter(data_neg[:, 0], data_neg[:, 1], data_neg[:, 2])
 
 
+        self.plot_all_gates(ax_pos) # -1 was here before???
+        #pos_feats = self.model(torch.tensor(data_pos.reshape([1, data_pos.shape[0],  -1])), torch.ones([1]))['leaf_logp'][0, :]
+        #neg_feats = self.model(torch.tensor(data_neg.reshape([1, data_neg.shape[0], -1])), torch.zeros([1]))['leaf_logp'][0, :]
+                
+
+        self.plot_all_gates(ax_neg)
+        
+        #legend1 = axes[0].legend(loc='upper right')
+        #legend2 = axes[0].legend([line for line in lines_for_legend], [str(pos_feat.cpu().detach().numpy()) for pos_feat in pos_feats], loc='lower left', title='Average Pos Feature')
+        #axes[0].add_artist(legend1)
+        #axes[1].legend([line for line in lines_for_legend], [str(neg_feat.cpu().detach().numpy()) for neg_feat in neg_feats], loc='lower left', title='Average Neg Feature')
+#        axes[0].legend.title('Average Pos Feature')
+#        axes[1].legend.title('Average Neg Feature')
+        return fig_pos, ax_pos, fig_neg, ax_neg
+
+
+    def plot_single_sample_with_gate(self, 
+        sample, sample_id, true_label, axis,
+        size='default', color='k', include_diagnostics=True,
+        true_feature=None, BALL=False
+    ):
+        if size == 'default':
+            size = 1000 * 1/self.data.shape[0]
+        else:
+            size = size
+        axis.scatter(sample[:, 0], sample[:, 1], color=color, s=size)
+        if not BALL:
+            axis.text(0.02, .02, '%d' %sample_id)
+        else:
+            axis.text(0.80, .02, '%d' %sample_id)
+            
+        lines_for_legend = self.plot_all_gates(axis)
+        output = self.model([torch.tensor(sample, dtype=torch.float)], torch.tensor([true_label], dtype=torch.float))
+        feats = torch.exp(output['leaf_logp'][0]) * 100
+        pred = (output['y_pred'].cpu().detach().numpy() >= .5) * 1.0
+        prob = output['y_pred']
+        
+        if include_diagnostics:
+            diagnostics_str = ''
+            if not (true_feature is None):
+                diagnostics_str += 'True Feature: %.2f' % true_feature + '\n'
+            diagnostics_str += 'Feature: %.2f' %feats
+            diagnostics_str += '\nPredicted Label: %d' %pred
+            diagnostics_str += '\nTrue Label: %d' %true_label
+            diagnostics_str += '\nPr(y=1|x): %.2f' %prob
+            if not BALL:
+                axis.text(.55, .02, diagnostics_str)
+            else:
+                axis.text(0.02, .02, diagnostics_str)
+            
+        #axis.legend([line for line in lines_for_legend], [str(feat.cpu().detach().numpy()) for feat in feats], loc='lower left')
+        
+        
+        
           
     def plot_all_gates(self, axis):
         cm = plt.get_cmap('hsv')
@@ -373,9 +603,6 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
 
         # plot gates instead of arbitrary pairs of data
         if gate_data_idxs:
-        # 2,3 -> SSC-H, CD45 
-        # 0, 1 -> FSC-A, SSC-A
-        # 5, 6 -> CD5, CD19
             gate_names = {(3, 4): 'SSC-H CD45', (0, 2): 'FSC-A SSC-A', (6, 7): 'CD5 CD19', (11, 8): 'CD10 CD79b', (0, 1):'FSC-A FSC-H', (2, 3): 'SSC-A SSC-H', (-1, 5): 'CD 38 CD22'}
             fig, axes = plt.subplots(len(gate_data_idxs), 1, figsize=(figlen * 1, figlen * len(gate_data_idxs)))
             for axis, gate_idxs in zip(axes, gate_data_idxs):

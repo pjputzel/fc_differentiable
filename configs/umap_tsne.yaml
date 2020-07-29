@@ -1,9 +1,8 @@
-
-save_dir: '../output/umap_with_feat_diff_newest/'
+save_dir: '../output/umap_tsne/'
 
 model_params:
-    node_type: 'square'
-    feature_diff_penalty: .0010
+    node_type: 'elliptical'
+    feature_diff_penalty: .10
 
 data_params:
     path_to_x_list: '../data/cll/data_for_UMAP_with_filtering/x_UMAP_dev.pkl' #'../data/semi_synth/all_data_2000_-2000.pkl' #'../data/cll/data_for_UMAP_with_filtering/data_for_UMAP.pkl' #'../data/cll/data_for_UMAP_with_filtering/x_UMAP_val.pkl' #data_for_UMAP_with_filtering/x_UMAP_dev.pkl #'../data/aml_data_tr.pkl' #
@@ -14,7 +13,7 @@ data_params:
 transform_params:
     cells_to_subsample: 10000
     num_cells_for_transformer: 100000
-    transform_type: 'umap' 
+    transform_type: 'tsne' 
 
 gate_init_cluster_params:
     n_clusters: 5

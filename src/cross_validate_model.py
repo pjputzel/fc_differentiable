@@ -20,7 +20,7 @@ import os
 import time
 from copy import deepcopy
 
-def cross_validate(path_to_params, n_runs):
+def cross_validate(path_to_params, n_runs, start_seed=0):
     start_time = time.time()
 
     params = TransformParameterParser(path_to_params).parse_params()
@@ -39,7 +39,11 @@ def cross_validate(path_to_params, n_runs):
     data_input = DataInput(params['data_params'])
     te_accs = []
     tr_accs = []
-    for run in range(n_runs):
+    # to get to the correct new split at start
+    for i in range(start_seed):
+        data_input.split_data()
+
+    for run in range(start_seed, n_runs):
         if not os.path.exists(os.path.join(params['save_dir'], 'run%d' %run)):
             os.makedirs(os.path.join(params['save_dir'], 'run%d' % run))
         savepath = os.path.join(params['save_dir'], 'run%d' %run)
@@ -78,8 +82,9 @@ def cross_validate(path_to_params, n_runs):
 
         with open(os.path.join(savepath, 'configs.pkl'), 'wb') as f:
             pickle.dump(params, f)
-
+        
         print('Complete main loop for run %d took %.4f seconds' %(run, time.time() - start_time))
+        start_time = time.time()
         print('Accuracy tr %.3f, te %.3f' %(performance_tracker.metrics['tr_acc'][-1], performance_tracker.metrics['te_acc'][-1]))
         te_accs.append(performance_tracker.metrics['te_acc'][-1])
         tr_accs.append(performance_tracker.metrics['tr_acc'][-1])
@@ -144,10 +149,10 @@ def get_next_gate_tree(unused_gate_trees, data_input, params, model=None):
 
 
 if __name__ == '__main__':
-#    path_to_params = '../configs/umap_transform_with_labels.yaml'
     path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
-#    path_to_params = '../configs/umap_clustering_default.yaml'
-#    path_to_params = '../configs/aml_testing.yaml'
+    #make and rerun with idential config except feat diff turned off for 50 runs
+#    path_to_params = '../configs/umap_without_feat_diff_reg.yaml'
     n_runs = 50
-    cross_validate(path_to_params, n_runs)
+    start_seed = 30
+    cross_validate(path_to_params, n_runs, start_seed=start_seed)
 

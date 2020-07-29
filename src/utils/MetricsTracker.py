@@ -1,5 +1,12 @@
 import numpy as np
+import pickle
+from collections import namedtuple
 import torch
+from utils.DataInput import DataInput
+
+###Simple helper class to save the tracker without saving the data input
+FIELD_NAMES_TO_SAVE = ['metric_names', 'epochs', 'metrics']
+Tracker = namedtuple('Tracker', FIELD_NAMES_TO_SAVE)
 
 
 '''
@@ -30,7 +37,19 @@ class MetricsTracker:
                 'dummy_test_function': self.print_meow
             }
         self.init_metric_funcs_and_metrics(metric_names)
-    
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # dont pickle data_input
+        del state['data_input']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # just set data_input to none when loading pickled tracker
+        self.data_input = None
+
+
     def init_metric_funcs_and_metrics(self, metric_names):
         self.metric_funcs = {}
         self.metrics = {}
@@ -154,3 +173,21 @@ class MetricsTracker:
 
     def print_meow(self, cur_outputs, split='tr'):
         print('meow')
+
+    def get_named_tuple_rep(self):
+        #attrs, vals = [], []
+        #for attr in dir(self):
+        #    val = getattr(self, attr)
+        #    if not (callable(attr) or type(val) == DataInput):
+        #        print(attr, callable(attr), val, type(val))
+        #        attrs.append(attr)
+        #        vals.append(val)
+        #print(attrs)
+        values = [vars(self)[key] for key in FIELD_NAMES_TO_SAVE]
+        named_tuple_rep = Tracker(*values)
+        return named_tuple_rep
+
+    def save_as_named_tuple(self, path):
+        named_tuple = self.get_named_tuple_rep()
+        with open(path, 'wb') as f:
+            pickle.dump(named_tuple, f)

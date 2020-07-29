@@ -28,6 +28,16 @@ def run_train_model(model, train_params, data_input):
     print('Training took %.3f seconds' %(time.time() - start))
     return tracker
 
+def set_current_sharpness(model, epoch, annealing_params):
+    init_k = annealing_params['init_sharpness']
+    final_k = annealing_params['final_sharpness']
+    rate = annealing_params['annealing_increase_rate']
+    cur_sharpness = init_k + rate * epoch
+    if cur_sharpness > final_k: 
+        model.logistic_k = torch.tensor(final_k)
+    else:
+        model.logistic_k = torch.tensor(cur_sharpness)
+
 def run_train_until_convergence_joint(model, train_params, data_input, tracker, full_optimizer, conv_thresh):
         prev_loss = torch.tensor(0)
         cur_loss = torch.tensor(np.inf)
@@ -35,6 +45,9 @@ def run_train_until_convergence_joint(model, train_params, data_input, tracker, 
         while torch.abs(cur_loss - prev_loss) > train_params['conv_thresh']:
             prev_loss = cur_loss
             cur_loss = step_params_jointly(model, data_input, full_optimizer)
+            if not (train_params['l1_reg_strength'] == 0):
+                cur_loss = cur_loss + model.get_l1_loss(train_params['l1_reg_strength'])
+
             if epoch % train_params['n_epoch_eval'] == 0:
                 tracker.update(epoch)
                 print_cur_metrics(tracker)
@@ -42,13 +55,16 @@ def run_train_until_convergence_joint(model, train_params, data_input, tracker, 
         #update tracker one last time
         if not epoch - 1 == tracker.epochs[-1]:
             tracker.update(epoch)
-
+            print_cur_metrics(tracker)
 
 def run_train_until_convergence_coord(model, train_params, data_input, tracker, optimizer_gates, conv_thresh):
         prev_loss = torch.tensor(0)
         cur_loss = torch.tensor(np.inf)
         epoch = 0
         while torch.abs(cur_loss - prev_loss) > train_params['conv_thresh']:
+            if train_params['annealing']:
+                set_current_sharpness(model, epoch, train_params['annealing'])
+    
             prev_loss = cur_loss
             fit_classifier_params(model, data_input,\
                 train_params['learning_rate_classifier'], l1_reg_strength=train_params['l1_reg_strength']) 
@@ -57,18 +73,26 @@ def run_train_until_convergence_coord(model, train_params, data_input, tracker, 
             if epoch % train_params['n_epoch_eval'] == 0:
                 tracker.update(epoch)
                 print_cur_metrics(tracker)
+                if train_params['annealing']:
+                    print('current sharpness: ', model.logistic_k)
             epoch += 1
         if not epoch - 1 == tracker.epochs[-1]:
             tracker.update(epoch)
+            print_cur_metrics(tracker)
 
 def run_train_fixed_epochs_joint(model, train_params, data_input, tracker, full_optimizer):
     for epoch in range(train_params['n_epoch']):
         cur_loss = step_params_jointly(model, data_input, full_optimizer)
+        print(cur_loss)
+        if not (train_params['l1_reg_strength'] == 0):
+            cur_loss = cur_loss + model.get_l1_loss(train_params['l1_reg_strength'])
+        print(cur_loss)
         if epoch % train_params['n_epoch_eval'] == 0:
             tracker.update(epoch)
             print_cur_metrics(tracker)
     if not epoch - 1 == tracker.epochs[-1]:
         tracker.update(epoch)
+        print_cur_metrics(tracker)
 
 def run_train_fixed_epochs_coord(model, train_params, data_input, tracker, optimizer_gates):
     for epoch in range(train_params['n_epoch']):
@@ -81,6 +105,7 @@ def run_train_fixed_epochs_coord(model, train_params, data_input, tracker, optim
             print_cur_metrics(tracker)
     if not epoch - 1 == tracker.epochs[-1]:
         tracker.update(epoch)
+        print_cur_metrics(tracker)
 
 
 def setup_tracker(model, data_input, metrics):

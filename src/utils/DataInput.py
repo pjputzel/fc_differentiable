@@ -1,4 +1,5 @@
 from sklearn.model_selection import train_test_split
+from utils.DataTransformerFactory import TSNEWrapper
 from utils.utils_load_data import normalize_x_list
 import utils.utils_load_data as dh
 import pickle
@@ -10,32 +11,66 @@ import matplotlib.pyplot as plt
 class DataInput:
     
     def __init__(self, data_params):
-        with open(data_params['path_to_x_list'], 'rb') as f:
-            self.x_all = pickle.load(f)
-        with open(data_params['path_to_labels'], 'rb') as f:
-            self.y_all = pickle.load(f)
-        with open(data_params['path_to_idxs'], 'rb') as f:
-            self.idxs_all = pickle.load(f)
-    
-        assert(len(self.x_all) == len(self.y_all))
         self.data_params = data_params
 
     def split_data(self, split_seed=None):
-        if split_seed or split_seed == 0:
-            self.idxs_all = np.arange(len(self.x_all))
-            self.x_tr, self.x_te, self.y_tr, self.y_te, self.idxs_tr, self.idxs_te =\
-                train_test_split(
-                    self.x_all, self.y_all, self.idxs_all,
-                    test_size=self.data_params['test_percent'],
-                    random_state=split_seed
-                )
-            print(self.idxs_tr)
-        else:
-            self.x_tr, self.x_te, self.y_tr, self.y_te, self.idxs_tr, self.idxs_te =\
-                train_test_split(
-                    self.x_all, self.y_all, self.idxs_all,
-                    test_size=self.data_params['test_percent']
-                )
+        if self.data_params['use_presplit_data']:
+            self.load_presplit_data()
+
+        else: 
+            with open(self.data_params['path_to_x_list'], 'rb') as f:
+                self.x_all = pickle.load(f)
+            with open(self.data_params['path_to_labels'], 'rb') as f:
+                self.y_all = pickle.load(f)
+            if self.data_params['path_to_idxs']:
+                with open(self.data_params['path_to_idxs'], 'rb') as f:
+                    self.idxs_all = pickle.load(f)
+                self.sample_names_all = self.idxs_all
+            else:
+                self.idxs_all = np.arange(len(self.x_all))
+            #print(self.idxs_all)        
+            assert(len(self.x_all) == len(self.y_all))
+
+            if split_seed or split_seed == 0:
+                self.idxs_all = np.arange(len(self.x_all))
+                self.x_tr, self.x_te, self.y_tr, self.y_te, self.idxs_tr, self.idxs_te =\
+                    train_test_split(
+                        self.x_all, self.y_all, self.idxs_all,
+                        test_size=self.data_params['test_percent'],
+                        random_state=split_seed
+                    )
+                print(self.idxs_tr)
+            else:
+                self.x_tr, self.x_te, self.y_tr, self.y_te, self.idxs_tr, self.idxs_te =\
+                    train_test_split(
+                        self.x_all, self.y_all, self.idxs_all,
+                        test_size=self.data_params['test_percent']
+                    )
+
+    def load_presplit_data(self):
+        with open(self.data_params['presplit_data']['x_tr'], 'rb') as f:
+            self.x_tr = pickle.load(f)
+        
+        with open(self.data_params['presplit_data']['x_te'], 'rb') as f:
+            self.x_te = pickle.load(f)
+    
+        with open(self.data_params['presplit_data']['y_tr'], 'rb') as f:
+            self.y_tr = pickle.load(f)
+
+        with open(self.data_params['presplit_data']['y_te'], 'rb') as f:
+            self.y_te = pickle.load(f)
+
+        with open(self.data_params['presplit_data']['idxs_tr'], 'rb') as f:
+            self.idxs_tr = pickle.load(f)
+
+        with open(self.data_params['presplit_data']['idxs_te'], 'rb') as f:
+            self.idxs_te = pickle.load(f)
+
+        self.x_all = self.x_tr + self.x_te
+        self.y_all = self.y_tr + self.y_te
+        self.idxs_all = self.idxs_tr + self.idxs_te
+        self.sample_names_all = self.idxs_all
+        
 
     def normalize_data(self):
         try:
@@ -72,7 +107,10 @@ class DataInput:
         if cells_to_subsample:
             permute_idxs = np.random.permutation(cell_level_labels.shape[0])
             labels_keyword_argument = cell_level_labels[permute_idxs][0:int(num_cells_for_transformer)] if use_labels_to_transform_data else None
-            transformer.fit(np.concatenate(self.x_tr)[permute_idxs][0:int(num_cells_for_transformer)], y=labels_keyword_argument)
+            if use_labels_to_transform_data:
+                transformer.fit(np.concatenate(self.x_tr)[permute_idxs][0:int(num_cells_for_transformer)], y=labels_keyword_argument)
+            else:
+                transformer.fit(np.concatenate(self.x_tr)[permute_idxs][0:int(num_cells_for_transformer)])
 
             shuffle_idxs_per_sample = [np.random.permutation(sample.shape[0]) for sample in self.x_tr]
             self.untransformed_matched_x_tr = [tr_sample[shuffle_idxs_per_sample[sample_idx]][0:int(cells_to_subsample)] for sample_idx, tr_sample in enumerate(self.x_tr)]
@@ -125,8 +163,13 @@ class DataInput:
    
     def save_transformer(self, savedir):
         savepath = os.path.join(savedir, 'transformer.pkl')
-        with open(savepath, 'wb') as f:
-            pickle.dump(self.transformer, f)
+        if isinstance(self.transformer, TSNEWrapper):
+            #with open(savepath, 'wb') as f:
+            #    pickle.dump(self.transformer.embedding, f)
+            pass
+        else:
+            with open(savepath, 'wb') as f:
+                pickle.dump(self.transformer, f)
     
     def get_pos_cat_tr_data(self):
         return np.concatenate([data for i, data in enumerate(self.x_tr) if self.y_tr[i] == 1])

@@ -1,5 +1,7 @@
 import umap 
 from sklearn.decomposition import PCA
+from openTSNE import TSNE
+
 #TODO move num_components into transform parameters as well as subsample params
 class DataTransformerFactory:
     def __init__(self, params, random_seed):
@@ -12,6 +14,8 @@ class DataTransformerFactory:
             transformer = self.manufacture_umapper()
         elif self.transform_type == 'pca':
             transformer = self.manufacture_pcaer()
+        elif self.transform_type == 'tsne':
+            transformer = self.manufacture_tsneer()
         else:
             raise ValueError('Transformer type %s not recognized' %self.transform_type)
         return transformer
@@ -29,3 +33,26 @@ class DataTransformerFactory:
     def manufacture_pcaer(self):
         pcaer = PCA(n_components = self.params['embed_dim'])
         return pcaer
+
+    def manufacture_tsneer(self):
+        tsneer = TSNEWrapper(
+            self.params,
+            self.random_seed
+        )
+        return tsneer
+
+
+class TSNEWrapper:
+    
+    def __init__(self, params, random_seed):
+        self.tsneer = TSNE(
+            n_components=params['embed_dim'],
+            random_state = random_seed
+        )
+
+    def fit(self, data):
+        self.embedding = self.tsneer.fit(data)
+    
+    def transform(self, data):
+        new_embedded_data = self.embedding.transform(data)
+        return new_embedded_data

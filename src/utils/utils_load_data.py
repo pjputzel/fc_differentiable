@@ -49,7 +49,7 @@ def get_reference_tree(file):
     return pickle.load(file)
 
 
-def filter_slope(data, dim1, dim2, x1, x2, y1, y2):
+def filter_slope(data, dim1, dim2, x1, x2, y1, y2, return_idx=False):
     """
     return subset of datapoints in data that fall into the V slope formed by [(0,0),(x1, y1)] and [(0,0),(x2, y2)]
     :param data: np.array (n_datapoints, n_features)
@@ -69,6 +69,8 @@ def filter_slope(data, dim1, dim2, x1, x2, y1, y2):
         raise ValueError("Slope of [(0,0), (x1, y1)] should be greater than the slope of [(0,0), (x2, y2)].")
     gradient = data[:, dim2] / data[:, dim1]
     idx = (gradient < y1 / x1) & (gradient > y2 / x2)
+    if return_idx:
+        return idx
     return data[idx]
 
 

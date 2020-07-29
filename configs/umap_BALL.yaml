@@ -1,0 +1,39 @@
+
+save_dir: '../output/umap_BALL_elliptical/'
+
+
+plot_umap_reflection: False
+
+model_params:
+    node_type: 'elliptical'
+    feature_diff_penalty: .10
+    negative_box_penalty: .1
+
+data_params:
+    path_to_x_list: '../data/B-ALL/easy_data.pkl' #'../data/aml_data_tr.pkl' #
+    path_to_labels: '../data/B-ALL/easy_data_labels.pkl' #'../data/aml_labels_tr.pkl'   #
+    path_to_idxs: '../data/B-ALL/easy_data_sample_ids.pkl'
+    test_percent: .05
+
+transform_params:
+    cells_to_subsample: 10000
+    num_cells_for_transformer: 100000
+    transform_type: 'umap' 
+
+gate_init_cluster_params:
+    #multi_k_init_values: [1, 3, 5, 7, 9]
+    n_clusters: 5
+    run_kde_first: False
+
+train_params:
+    #n_epoch: 20
+    conv_thresh: 0.00001
+    learning_rate_classifier: 0.001
+    learning_rate_gates: .05
+    l1_reg_strength: .00
+    descent_type: 'coordinate_descent'
+    num_gates_to_learn: 1
+    annealing: False
+    #    init_sharpness: 1
+    #    final_sharpness: 100
+    #    annealing_increase_rate: 3

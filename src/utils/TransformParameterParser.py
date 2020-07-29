@@ -30,10 +30,21 @@ class TransformParameterParser:
 
 DEFAULT_PARAMS =\
     {
+        'plot_umap_reflection': False,
         'random_seed': 0,
         'data_params':\
             {
                 'test_percent': .2, 
+                'use_presplit_data': False,
+                'presplit_data':\
+                    {
+                        'x_tr': None,
+                        'x_te': None,
+                        'y_tr': None,
+                        'y_te': None,
+                        'idxs_tr': None,
+                        'idxs_te': None,
+                    }
             },
         'transform_params':\
             {
@@ -96,5 +107,13 @@ DEFAULT_PARAMS =\
                 'learning_rate_gates': 0.05,
                 'conv_thresh': None,
                 'descent_type': 'joint_descent',
+                'annealing': False,
+                'fix_gates': False,
+            },
+
+        'cross_validate':\
+            {
+                
+            
             }, 
     }

@@ -1,6 +1,10 @@
 from utils.bayes_gate import ModelTree
 from utils.bayes_gate import ModelNode
 from utils.bayes_gate import SquareModelNode
+from utils.bayes_gate import CircularModelNode
+from utils.bayes_gate import AxisAlignedEllipticalModelNode
+from utils.bayes_gate import EllipticalModelNode
+from utils.bayes_gate import SphericalModelNode
 from utils.bayes_gate import Gate
 import torch 
 import torch.nn as nn
@@ -35,11 +39,24 @@ class DepthOneModel(ModelTree):
         self.num_gates = self.num_gates + 1
         
     def get_node(self, gate):
-        gate = InitGate(gate) 
         if self.node_type == 'square':
+            gate = InitGate(gate) 
             node = SquareModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default)
         elif self.node_type == 'rectangle':
+            gate = InitGate(gate) 
             node = ModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default)
+        elif self.node_type == 'circular':
+            node = CircularModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
+        
+        elif self.node_type == 'axis_aligned_elliptical':
+            node = AxisAlignedEllipticalModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
+
+        elif self.node_type == 'elliptical':
+            node = EllipticalModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
+
+        elif self.node_type == 'spherical':
+            node = SphericalModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
+
         else:
             raise ValueError('Node type not recognized. Options are square, and rectangle')
         return node
@@ -66,6 +83,9 @@ class DepthOneModel(ModelTree):
                 self.output['leaf_logp'] = self.output['leaf_logp'].detach()
             self.output['y_pred'] = torch.sigmoid(self.linear(self.output['leaf_logp'])).squeeze(1)
         
+        self.output['feature_diff_reg'] = torch.tensor(0.)
+        self.output['emp_reg_loss'] = torch.tensor(0.)
+        self.output['log_loss'] = torch.tensor(0.)
         if y is not None:
             self.update_output_feat_diff_and_emp_reg(x, y)
             if self.classifier:
@@ -146,17 +166,28 @@ class DepthOneModel(ModelTree):
 
     def get_gate_tree(self):
         gates = self.get_gates()
-        tree = []
-        for gate in gates:
-            tree.append(
-                [
-                    ['D1', gate[0], gate[1]],
-                    ['D2', gate[2], gate[3]]
-                ]
-            )
+        if self.node_type == 'circular':
+            tree = gates
+        else:
+            tree = []
+            for gate in gates:
+                tree.append(
+                    [
+                        ['D1', gate[0], gate[1]],
+                        ['D2', gate[2], gate[3]]
+                    ]
+                )
         return tree
 
     def fix_size_params(self, size):
         for node in self.nodes:
             node.side_length_param.requires_grad = False
-        
+       
+    def freeze_gate_params(self):
+        for node in self.nodes:
+            for param in node.parameters():
+                param.requires_grad = False
+
+    def get_l1_loss(self, l1_reg_strength):
+        return l1_reg_strength * torch.norm(self.linear.weight)
+ 

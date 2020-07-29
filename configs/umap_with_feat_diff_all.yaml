@@ -1,0 +1,34 @@
+
+
+save_dir: '../output/umap_with_feat_diff_all/'
+
+model_params:
+    node_type: 'square'
+    feature_diff_penalty: .0010
+
+data_params:
+    path_to_x_list: '../data/cll/data_for_UMAP_with_filtering/data_for_UMAP.pkl' #'../data/cll/data_for_UMAP_with_filtering/x_UMAP_val.pkl' #data_for_UMAP_with_filtering/x_UMAP_dev.pkl #'../data/aml_data_tr.pkl' #
+    path_to_labels: '../data/cll/data_for_UMAP_with_filtering/labels_for_UMAP.pkl' #'./data/cll/data_for_UMAP_with_filtering/y_UMAP_val.pkl' #data_for_UMAP_with_filtering/y_UMAP_dev.pkl' #'../data/aml_labels_tr.pkl'   #
+    path_to_idxs: '../data/cll/data_for_UMAP_with_filtering/sample_ids_for_UMAP.pkl'
+    test_percent: .05
+
+transform_params:
+    cells_to_subsample: 10000
+    num_cells_for_transformer: 100000
+    transform_type: 'umap' 
+
+gate_init_cluster_params:
+    n_clusters: 5
+    run_kde_first: False
+
+train_params:
+    #n_epoch: 20
+    conv_thresh: 0.00001
+    learning_rate_classifier: 0.001
+    learning_rate_gates: .05
+    l1_reg_strength: .00
+    descent_type: 'coordinate_descent'
+    num_gates_to_learn: 1
+    
+
+

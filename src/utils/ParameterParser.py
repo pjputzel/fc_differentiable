@@ -2,6 +2,7 @@ import pickle
 import yaml
 
 default_hparams = {
+    'plot_umap_reflection': False,
     'logistic_k': 100,
     'logistic_k_dafi': 10000,
     'regularization_penalty': 0,
