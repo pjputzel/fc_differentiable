@@ -19,6 +19,7 @@ transform_params:
     cells_to_subsample: 10000
     num_cells_for_transformer: 100000
     transform_type: 'umap' 
+    use_labels_to_transform_data: True
 
 gate_init_cluster_params:
     #multi_k_init_values: [1, 3, 5, 7, 9]

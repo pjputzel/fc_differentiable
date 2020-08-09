@@ -1,0 +1,1 @@
+These are older mains that aren't necessarily up to date with the current code base. They should only be used as a starting point for writing a new main that does something similar to an old main. They very likely will just crash if you try to run them with the current code

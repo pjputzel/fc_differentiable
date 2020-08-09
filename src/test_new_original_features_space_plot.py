@@ -21,7 +21,7 @@ from copy import deepcopy
 
 
 
-def test_plot(path_to_params):
+def test_plot(path_to_params, BALL=False):
     params = TransformParameterParser(path_to_params).parse_params()
     #params['data_params']['path_to_x_list'] = '../data/cll/x_UMAP_dev_not_swapped.pkl'
     #params['transform_params']['cells_to_subsample'] = 100 #UNCOMMENT ME JUST FOR DEBUGGING
@@ -46,29 +46,33 @@ def test_plot(path_to_params):
 
 
     plotter = DataAndGatesPlotterDepthOne(model, catted_data)
-    gate_data_idxs = [[3, 4], [0, 2], [6, 7], [11, 8], [0, 1], [2, 3], [-1, 5]]
+    if BALL:
+        # set automatically since they match the original data for BALL
+        gate_data_idxs = [[0, 1], [2, 5], [9, 6], [7, 8], [4, 1], [7, 10], [6, 10], [7, 3]]
+    else:
+        gate_data_idxs = [[3, 4], [0, 2], [6, 7], [11, 8], [0, 1], [2, 3], [-1, 5]]
     #plotter.plot_inverse_UMAP_transform_in_feature_space_with_filtering(umapper, np.concatenate(data_input.untransformed_matched_x_tr), gate_data_idxs=gate_data_idxs, ms=5)
     #plt.savefig('points_in_original_feature_space_with_filtering.png')
     #plt.clf()
-    plotter.plot_inverse_UMAP_transform_in_feature_space(umapper, np.concatenate(data_input.untransformed_matched_x_tr), gate_data_idxs=gate_data_idxs, ms=.01)
+    plotter.plot_inverse_UMAP_transform_in_feature_space(umapper, np.concatenate(data_input.untransformed_matched_x_tr), gate_data_idxs=gate_data_idxs, ms=.01, BALL=BALL)
     plt.savefig('points_in_original_feature_space.png')
     plt.clf()
 
     plotter_pos = DataAndGatesPlotterDepthOne(model, catted_data_pos)
-    plotter_pos.plot_inverse_UMAP_transform_in_feature_space(umapper, np.concatenate([data_input.untransformed_matched_x_tr[i] for i in range(len(data_input.x_tr)) if data_input.y_tr[i] == 1]), gate_data_idxs=gate_data_idxs, ms=5)
+    plotter_pos.plot_inverse_UMAP_transform_in_feature_space(umapper, np.concatenate([data_input.untransformed_matched_x_tr[i] for i in range(len(data_input.x_tr)) if data_input.y_tr[i] == 1]), gate_data_idxs=gate_data_idxs, ms=5, BALL=BALL)
     plt.savefig('points_in_original_feature_space_pos.png')
     plt.clf()
     
     plotter_neg = DataAndGatesPlotterDepthOne(model, catted_data_neg)
-    plotter_neg.plot_inverse_UMAP_transform_in_feature_space(umapper, np.concatenate([data_input.untransformed_matched_x_tr[i] for i in range(len(data_input.x_tr)) if data_input.y_tr[i] == 0]), gate_data_idxs=gate_data_idxs, ms=5)
+    plotter_neg.plot_inverse_UMAP_transform_in_feature_space(umapper, np.concatenate([data_input.untransformed_matched_x_tr[i] for i in range(len(data_input.x_tr)) if data_input.y_tr[i] == 0]), gate_data_idxs=gate_data_idxs, ms=5, BALL=BALL)
     plt.savefig('points_in_original_feature_space_neg.png')
 
     plotter_extra_sample1 = DataAndGatesPlotterDepthOne(model, data_input.x_tr[0])
-    plotter_extra_sample1.plot_inverse_UMAP_transform_in_feature_space(umapper, data_input.untransformed_matched_x_tr[0], gate_data_idxs=gate_data_idxs, ms=5)
+    plotter_extra_sample1.plot_inverse_UMAP_transform_in_feature_space(umapper, data_input.untransformed_matched_x_tr[0], gate_data_idxs=gate_data_idxs, ms=5, BALL=BALL)
     plt.savefig('points_in_original_feature_space_%d.png' %data_input.idxs_tr[0])
 
     plotter_extra_sample2 = DataAndGatesPlotterDepthOne(model, data_input.x_tr[1])
-    plotter_extra_sample2.plot_inverse_UMAP_transform_in_feature_space(umapper, data_input.untransformed_matched_x_tr[1], gate_data_idxs=gate_data_idxs, ms=5)
+    plotter_extra_sample2.plot_inverse_UMAP_transform_in_feature_space(umapper, data_input.untransformed_matched_x_tr[1], gate_data_idxs=gate_data_idxs, ms=5, BALL=BALL)
     plt.savefig('points_in_original_feature_space_%d.png' %data_input.idxs_tr[1])
 
 
@@ -118,4 +122,4 @@ if __name__ == '__main__':
     #path_to_umapper = '../output/umap_current_without_feat_diff_plot_testing/transformer.pkl'
     #path_to_trackers = '../output/umap_with_feat_diff_plot_testing/trackers.pkl'
     #make_ori_features_plot(path_to_model, path_to_params, path_to_umapper, path_to_trackers, savename='ori_plot_with_feat_diff_reg.png')
-    test_plot('../configs/umap_3d.yaml')
+    test_plot('../configs/umap_BALL.yaml', BALL=True)

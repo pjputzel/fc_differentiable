@@ -81,7 +81,18 @@ class DataAndGatesPlotter():
             )**(1/2)
 
             return_value = dist <= gate[1]
-        
+        elif type(node).__name__ == 'EllipticalModelNode':
+            ell_gate = node.get_gate()
+            center = ell_gate[0]
+            a = ell_gate[1]
+            b = ell_gate[2]
+            theta = ell_gate[3]
+            dist = node.compute_dist_to_ellipse(
+                center[0], center[1], a, b, theta, torch.tensor(data)
+            )
+            return_value = dist <= 0
+            return_value = torch.tensor(np.array([True if ret == 1 else False for ret in return_value])    )
+            print(return_value)
         return return_value
 
     def construct_gates(self):
@@ -595,7 +606,7 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         return lines_for_legend
             
 
-    def plot_inverse_UMAP_transform_in_feature_space(self, umapper, untransformed_data, gate_data_idxs=None, figlen=10, ms=.1):
+    def plot_inverse_UMAP_transform_in_feature_space(self, umapper, untransformed_data, gate_data_idxs=None, figlen=10, ms=.1, BALL=False):
         matplotlib.rcParams.update({'font.size': 22})
         data_inside_first_gate_idxs = self.filter_data_at_single_node(self.data, self.model.nodes[0], return_idxs=True)
         
@@ -603,7 +614,20 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
 
         # plot gates instead of arbitrary pairs of data
         if gate_data_idxs:
-            gate_names = {(3, 4): 'SSC-H CD45', (0, 2): 'FSC-A SSC-A', (6, 7): 'CD5 CD19', (11, 8): 'CD10 CD79b', (0, 1):'FSC-A FSC-H', (2, 3): 'SSC-A SSC-H', (-1, 5): 'CD 38 CD22'}
+            if not BALL:
+                gate_names = {(3, 4): 'SSC-H CD45', (0, 2): 'FSC-A SSC-A', (6, 7): 'CD5 CD19', (11, 8): 'CD10 CD79b', (0, 1):'FSC-A FSC-H', (2, 3): 'SSC-A SSC-H', (-1, 5): 'CD 38 CD22'}
+            else:
+                gate_names = {
+                    (0, 1): 'FSC SSC',
+                    (2, 5):'CD66b CD24',
+                    (9, 6): 'CD20 CD10',
+                    (7, 8): 'CD34 CD38',
+                    (4, 1): 'CD19 SSC',
+                    (7, 10): 'CD34 CD45',
+                    (6, 10): 'CD10 CD45',
+                    (7, 3): 'CD34 CD22',
+                }
+                gate_data_idxs = [[0, 1], [2, 5], [9, 6], [7, 8], [4, 1], [7, 10], [6, 10], [7, 3]]
             fig, axes = plt.subplots(len(gate_data_idxs), 1, figsize=(figlen * 1, figlen * len(gate_data_idxs)))
             for axis, gate_idxs in zip(axes, gate_data_idxs):
                 axis.scatter(untransformed_data[:, gate_idxs[0]], untransformed_data[:, gate_idxs[1]], c='lightgrey', s=ms/10)
