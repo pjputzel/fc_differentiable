@@ -4,19 +4,19 @@ plot_umap_reflection: False
 
 model_params:
     node_type: 'circular'
-    feature_diff_penalty: .0010
+    feature_diff_penalty: .001
 
 data_params:
-    path_to_x_list: '../data/cll/data_for_UMAP_with_filtering/x_UMAP_dev.pkl' #'../data/aml_data_tr.pkl' #
-    path_to_labels: '../data/cll/data_for_UMAP_with_filtering/y_UMAP_dev.pkl' #'../data/aml_labels_tr.pkl'   #
-    path_to_idxs: '../data/cll/data_for_UMAP_with_filtering/sample_ids_UMAP_dev.pkl'
+    path_to_x_list: '../data/cll/data_for_UMAP_with_filtering/x_UMAP_dev.pkl' #'../data/B-ALL/easy_data.pkl' # #'../data/aml_data_tr.pkl' #
+    path_to_labels: '../data/cll/data_for_UMAP_with_filtering/y_UMAP_dev.pkl' #'../data/B-ALL/easy_data_labels.pkl' # #'../data/aml_labels_tr.pkl'   #
+    path_to_idxs: '../data/cll/data_for_UMAP_with_filtering/sample_ids_UMAP_dev.pkl' #'../data/B-ALL/easy_data_sample_ids.pkl' 
     test_percent: .05
 
 transform_params:
     cells_to_subsample: 10000
     num_cells_for_transformer: 100000
     transform_type: 'umap' 
-    #use_labels_to_transform_data: True
+    use_labels_to_transform_data: True
 
 gate_init_cluster_params:
     n_clusters: 5

@@ -83,6 +83,8 @@ DEFAULT_PARAMS =\
                 'loss_type': 'logistic',
                 'node_type': 'rectangle',
                 'logistic_k': 100,
+                'depth_one_disjunction_of_all_gates': False,
+                'disjunctive_k': 10, 
                 'regularisation_penalty':0. ,
                 'negative_box_penalty': 0.,
                 'positive_box_penalty': 0.,

@@ -190,4 +190,54 @@ class DepthOneModel(ModelTree):
 
     def get_l1_loss(self, l1_reg_strength):
         return l1_reg_strength * torch.norm(self.linear.weight)
- 
+
+class DisjunctiveDepthOneModel(DepthOneModel):
+
+    def __init__(self, init_gates, model_params):
+        super().__init__(init_gates, model_params)
+        # disjunction of all gates, so there's only a single feature!
+        self.linear = nn.Linear(1, 1)
+
+    def forward(self, x, y=None, detach_logistic_params=False, use_hard_proportions=False, device=0):
+        self.set_device(0)
+        self.init_output(x) 
+        
+        for sample_idx in range(len(x)):
+            for leaf_idx in range(len(self.nodes)):
+                # updates the old regularization that doesnt seem to work well
+                # also updates the leaf probabilities
+                self.update_output_per_leaf(leaf_idx, sample_idx, x[sample_idx])
+
+        loss = self.output['ref_reg_loss'] + self.output['size_reg_loss'] + self.output['corner_reg_loss'] + self.output['init_reg_loss']
+
+        if use_hard_proportions:
+            self.output['leaf_probs'] = torch.tensor(self.get_hard_proportions(x)[:, np.newaxis], dtype=torch.float32).cuda()
+        
+        # this is the only difference with DepthOneModel forwards
+        # we take log of the (smoothed) disjunction to get a single feature
+        smooth_disjunction = self.get_smooth_disjunction()
+        self.output['leaf_logp'] = torch.log(smooth_disjunction)
+
+
+        if self.classifier:
+            if detach_logistic_params:
+                self.output['leaf_logp'] = self.output['leaf_logp'].detach()
+            self.output['y_pred'] = torch.sigmoid(self.linear(self.output['leaf_logp'])).squeeze(1)
+        
+        self.output['feature_diff_reg'] = torch.tensor(0.)
+        self.output['emp_reg_loss'] = torch.tensor(0.)
+        self.output['log_loss'] = torch.tensor(0.)
+        if y is not None:
+            self.update_output_feat_diff_and_emp_reg(x, y)
+            if self.classifier:
+                self.update_output_classification_loss(y)
+        loss = loss + self.output['feature_diff_reg'] + self.output['emp_reg_loss'] + self.output['log_loss']
+        self.output['loss'] = loss
+        return self.output
+
+    def get_smooth_disjunction(self):
+        smooth_disjunction = torch.sigmoid(
+            (1. - torch.sum(self.output['leaf_probs'], dim=1) ) \
+            * self.disjunction_sharpness
+        )
+        return smooth_disjunction
