@@ -1,20 +1,21 @@
 
 
-save_dir: '../output/umap_BALL_multik_keep_all/'
+
+save_dir: '../output/umap_CLL_multik_keep_all/'
 
 
 plot_umap_reflection: False
 
 model_params:
     node_type: 'circular'
-    feature_diff_penalty: .10
-    negative_box_penalty: 1.
+    feature_diff_penalty: .01
+    negative_box_penalty: 0.
     # for disjunction of all gates
     depth_one_disjunction_of_all_gates: True
 data_params:
-    path_to_x_list: '../data/B-ALL/easy_data.pkl' #'../data/aml_data_tr.pkl' #
-    path_to_labels: '../data/B-ALL/easy_data_labels.pkl' #'../data/aml_labels_tr.pkl'   #
-    path_to_idxs: '../data/B-ALL/easy_data_sample_ids.pkl'
+    path_to_x_list: '../data/cll/data_for_UMAP_with_filtering/x_UMAP_dev.pkl' #'../data/B-ALL/easy_data.pkl' # #'../data/aml_data_tr.pkl' #
+    path_to_labels: '../data/cll/data_for_UMAP_with_filtering/y_UMAP_dev.pkl' #'../data/B-ALL/easy_data_labels.pkl' # #'../data/aml_labels_tr.pkl'   #
+    path_to_idxs: '../data/cll/data_for_UMAP_with_filtering/sample_ids_UMAP_dev.pkl' #'../data/B-ALL/easy_data_sample_ids.pkl' 
     test_percent: .05
 
 transform_params:

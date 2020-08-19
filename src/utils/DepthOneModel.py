@@ -202,6 +202,7 @@ class DisjunctiveDepthOneModel(DepthOneModel):
         self.set_device(0)
         self.init_output(x) 
         
+        self.init_leaf_gates(x)
         for sample_idx in range(len(x)):
             for leaf_idx in range(len(self.nodes)):
                 # updates the old regularization that doesnt seem to work well
@@ -215,8 +216,9 @@ class DisjunctiveDepthOneModel(DepthOneModel):
         
         # this is the only difference with DepthOneModel forwards
         # we take log of the (smoothed) disjunction to get a single feature
-        smooth_disjunction = self.get_smooth_disjunction()
-        self.output['leaf_logp'] = torch.log(smooth_disjunction)
+        smooth_disjunction_prop = self.get_smooth_disjunction_proportion(x)
+        self.output['leaf_probs'] = smooth_disjunction_prop
+        self.output['leaf_logp'] = torch.log(smooth_disjunction_prop).clamp(-1000)
 
 
         if self.classifier:
@@ -235,9 +237,34 @@ class DisjunctiveDepthOneModel(DepthOneModel):
         self.output['loss'] = loss
         return self.output
 
-    def get_smooth_disjunction(self):
-        smooth_disjunction = torch.sigmoid(
-            (1. - torch.sum(self.output['leaf_probs'], dim=1) ) \
-            * self.disjunction_sharpness
-        )
-        return smooth_disjunction
+    def init_leaf_gates(self, x):
+        max_num_cells = np.max(np.array([s.shape[0] for s in x]))
+        self.output['leaf_gates'] = torch.zeros([len(x), self.num_gates, max_num_cells])
+
+    def update_output_per_leaf(self, leaf_idx, sample_idx, single_sample):
+        leaf_node = self.nodes[leaf_idx]
+        logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty = leaf_node(single_sample)
+        self.output['ref_reg_loss'] += ref_reg_penalty * self.regularisation_penalty / len(single_sample) 
+        self.output['size_reg_loss'] += size_reg_penalty * self.gate_size_penalty / len(single_sample)
+        self.output['corner_reg_loss'] += corner_reg_penalty * self.corner_penalty / len(single_sample)
+        self.output['init_reg_loss'] += init_reg_penalty * self.init_reg_penalty/ len(single_sample)
+#        self.output['leaf_probs'][sample_idx, leaf_idx] = logp.exp().sum(dim=0) / single_sample.shape[0]
+        self.output['leaf_gates'][sample_idx, leaf_idx, :single_sample.shape[0]] = torch.exp(logp)
+
+    def get_smooth_disjunction_proportion(self, x):
+        # use .5 * self.num_gates as the center of the sigmoid
+        # since this would be the case where a cell is on the boundary
+        # for every gate (ie we should have 50 percent chance of being in
+        # the disjunction)
+        #smooth_disjunction = torch.sigmoid(
+        #    (torch.sum(self.output['leaf_probs'], dim=1) - .5 * self.num_gates) \
+        #    * self.disjunctive_k 
+        #)
+        smooth_disjunction = torch.max(self.output['leaf_gates'], dim=1)[0]
+#        print(smooth_disjunction)
+#        print(smooth_disjunction.shape)
+        sample_shapes = torch.tensor([s.shape[0] for s in x], dtype=smooth_disjunction.dtype)
+        smooth_disjunction_prop = smooth_disjunction.sum(dim=1)/sample_shapes
+#        print('disjunction props:\n', smooth_disjunction_prop)
+#        print(smooth_disjunction_prop.shape)
+        return smooth_disjunction_prop.reshape(-1, 1)

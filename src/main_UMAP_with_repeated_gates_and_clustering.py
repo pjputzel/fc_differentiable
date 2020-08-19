@@ -237,6 +237,5 @@ if __name__ == '__main__':
 #    path_to_params = '../configs/umap_with_presplit.yaml'
 
 #    path_to_params = '../configs/umap_BALL.yaml'
-    path_to_params = '../configs/umap_BALL_multik_keep_all.yaml'
     main_with_path(path_to_params)    
 

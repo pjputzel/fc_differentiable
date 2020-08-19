@@ -9,6 +9,7 @@ from utils.DataInput import DataInput
 from utils.GateInitializerPrimKDE import GateInitializerPrimKDE
 from utils.GateInitializerClustering import GateInitializerClustering
 from utils.DepthOneModel import DepthOneModel
+from utils.DepthOneModel import DisjunctiveDepthOneModel
 from utils.DataAndGatesPlotter import DataAndGatesPlotterDepthOne
 from utils.DataTransformerFactory import DataTransformerFactory
 from train_UMAP import run_train_model
@@ -51,7 +52,7 @@ def main(path_to_params):
 
     potential_gates = get_all_potential_gates(data_input, params)
     data_input.convert_all_data_to_tensors()
-    model = DepthOneModel(potential_gates, params['model_params'])
+    model = initialize_model(params['model_params'], potential_gates)
 
     if params['train_params']['fix_gates']:
         model.freeze_gate_params()
@@ -137,6 +138,14 @@ def main(path_to_params):
 def set_random_seeds(params):
     torch.manual_seed(params['random_seed'])
     np.random.seed(params['random_seed'])
+
+
+def initialize_model(model_params, init_gate_tree):
+     if model_params['depth_one_disjunction_of_all_gates']:
+         model = DisjunctiveDepthOneModel(init_gate_tree, model_params)
+     else:
+         model = DepthOneModel(init_gate_tree, model_params)
+     return model
 
 
 # TODO: move this function to a helper file and call it in each main!
@@ -334,6 +343,7 @@ if __name__ == '__main__':
 #    path_to_params = '../configs/umap_with_presplit.yaml'
 
 #    path_to_params = '../configs/umap_BALL.yaml'
-    path_to_params = '../configs/umap_BALL_multik_keep_all.yaml'
+#    path_to_params = '../configs/umap_BALL_multik_keep_all.yaml'
+    path_to_params = '../configs/umap_CLL_multik_keep_all.yaml'
     main(path_to_params)    
 
