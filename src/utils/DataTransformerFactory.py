@@ -16,6 +16,8 @@ class DataTransformerFactory:
             transformer = self.manufacture_pcaer()
         elif self.transform_type == 'tsne':
             transformer = self.manufacture_tsneer()
+        elif self.transform_type == 'identity':
+            transformer = self.manufacture_identityer()
         else:
             raise ValueError('Transformer type %s not recognized' %self.transform_type)
         return transformer
@@ -41,6 +43,18 @@ class DataTransformerFactory:
         )
         return tsneer
 
+    def manufacture_identityer(self):
+        return IdentityTransformer()
+
+class IdentityTransformer:
+    def __init__(self):
+        return
+    
+    def fit(self, data):
+        return data
+
+    def transform(self, data):
+        return data
 
 class TSNEWrapper:
     

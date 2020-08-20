@@ -5,6 +5,7 @@ from utils.bayes_gate import CircularModelNode
 from utils.bayes_gate import AxisAlignedEllipticalModelNode
 from utils.bayes_gate import EllipticalModelNode
 from utils.bayes_gate import SphericalModelNode
+from utils.bayes_gate import BallModelNode
 from utils.bayes_gate import Gate
 import torch 
 import torch.nn as nn
@@ -39,6 +40,7 @@ class DepthOneModel(ModelTree):
         self.num_gates = self.num_gates + 1
         
     def get_node(self, gate):
+        print(self.node_type)
         if self.node_type == 'square':
             gate = InitGate(gate) 
             node = SquareModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default)
@@ -47,16 +49,15 @@ class DepthOneModel(ModelTree):
             node = ModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default)
         elif self.node_type == 'circular':
             node = CircularModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
-        
         elif self.node_type == 'axis_aligned_elliptical':
             node = AxisAlignedEllipticalModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
 
         elif self.node_type == 'elliptical':
             node = EllipticalModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
-
         elif self.node_type == 'spherical':
             node = SphericalModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
-
+        elif self.node_type == 'ball':
+            node = BallModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
         else:
             raise ValueError('Node type not recognized. Options are square, and rectangle')
         return node
@@ -128,7 +129,6 @@ class DepthOneModel(ModelTree):
         self.output['init_reg_loss'] += init_reg_penalty * self.init_reg_penalty/ len(single_sample)
         self.output['leaf_probs'][sample_idx, leaf_idx] = logp.exp().sum(dim=0) / single_sample.shape[0]
 
-    
     def update_output_feat_diff_and_emp_reg(self, x, y):
         pos_mean = 0.
         neg_mean = 0.

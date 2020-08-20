@@ -310,7 +310,7 @@ class SquareModelNode(ModelNode):
                 self.__log_odds_ratio__(
                     square_gate.low1 + \
                     (square_gate.upp1 - square_gate.low1)/2.
-                ), 
+                ),
                 dtype=torch.float32
             )
         )
@@ -431,59 +431,6 @@ class CircularModelNode(ModelNode):
         self.init_gate_params(init_tree)
         self.init_tree = init_tree
 
-
-
-
-    def init_gate_params(self, tree):
-        # first make the gate circular
-        # note that the gate here will have negative values
-        # reminder: the tree gates are normalized to 0,1 at this point
-        print('tree is', tree)
-        x_dist = tree[0][2] - tree[0][1]
-        y_dist = tree[1][2] - tree[1][1]
-        tree = [
-            tree[0][0] + tree[1][0],
-            [tree[0][1] + x_dist/2, tree[1][1] + y_dist/2],
-            (x_dist/2 + y_dist/2)/2 
-        ]
-        print('after circularizing:', tree)
-    
-        center = tree[1]
-        radius = tree[2]
-
-        self.center1_param = nn.Parameter(
-                torch.tensor(
-                self.__log_odds_ratio__(
-                    center[0]
-                ), 
-                dtype=torch.float32
-            )
-        )
-        self.center2_param = nn.Parameter(
-                torch.tensor(
-                self.__log_odds_ratio__(
-                    center[1]
-                ), 
-                dtype=torch.float32
-            )
-        )
-
-
-        self.radius_param = nn.Parameter(
-                torch.tensor(
-                self.__log_odds_ratio__(radius), 
-                dtype=torch.float32
-                )
-        )
-
-    def replace_nans_with_0(self, grad):
-        if torch.isnan(grad):
-            grad = torch.tensor([0.])
-            if torch.cuda.is_available():
-                grad.cuda()
-        return torch.autograd.Variable(grad)
-
-
     def forward(self, x):
         """
         compute the log probability that each cell passes the gate
@@ -521,12 +468,60 @@ class CircularModelNode(ModelNode):
         delta_r = dist - radius
         return F.logsigmoid(-self.logistic_k * delta_r)
 
+
+    def init_gate_params(self, tree):
+        # first make the gate circular
+        # note that the gate here will have negative values
+        # reminder: the tree gates are normalized to 0,1 at this point
+        print('tree is', tree)
+        x_dist = tree[0][2] - tree[0][1]
+        y_dist = tree[1][2] - tree[1][1]
+        tree = [
+            tree[0][0] + tree[1][0],
+            [tree[0][1] + x_dist/2, tree[1][1] + y_dist/2],
+            (x_dist/2 + y_dist/2)/2 
+        ]
+        print('after circularizing:', tree)
+    
+        center = tree[1]
+        radius = tree[2]
+
+        self.center1_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[0]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        self.center2_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(
+                    center[1]
+                ), 
+                dtype=torch.float32
+            )
+        )
+        
+        self.radius_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(radius), 
+                dtype=torch.float32
+                )
+        )
+
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = torch.tensor([0.])
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
     def get_gate(self):
         gate_center1 = F.sigmoid(self.center1_param)
         gate_center2 = F.sigmoid(self.center2_param)
         radius = F.sigmoid(self.radius_param)
         return [[gate_center1, gate_center2], radius]
-
 
     def __repr__(self):
         repr_string = ('ModelNode(\n'
@@ -542,8 +537,7 @@ class CircularModelNode(ModelNode):
         return repr_string.format(
             dim1=self.gate_dim1,
             dim2=self.gate_dim2,
-            center1=gate_center1.item(),
-            center2=gate_center2.item(),
+            center=gate_center.item(),
             radius=radius.item(),
             panel=self.panel
         )
@@ -1224,7 +1218,10 @@ class ModelTree(nn.Module):
             center3 = F.sigmoid(node.center3_param)
             radius = F.sigmoid(node.radius_param)
             return [[center1, center2, center3], radius]
-
+        elif type(node).__name__ == 'BallModelNode':
+            center = [F.sigmoid(c) for c in node.center_params]
+            radius = F.sigmoid(node.radius_param)
+            return [center, radius]
         else:
             gate_low1 = node.gate_low1_param.cpu().detach().numpy()
             gate_low2 = node.gate_low2_param.cpu().detach().numpy()
@@ -2015,3 +2012,117 @@ class ModelForest(nn.Module):
             output['loss'] = output['ref_reg_loss'] + output['size_reg_loss'] + \
                              output['emp_reg_loss'] + output['log_loss'] + output['corner_reg_loss']
         return output
+
+class BallModelNode(ModelNode):
+    def __init__(self, logistic_k, init_tree, gate_size_default=(1./4, 1./4), is_root=False, panel='both', gate_dim1='D1', gate_dim2='D2'):
+        super(ModelNode, self).__init__()
+        self.logistic_k = logistic_k
+        self.gate_dim1 = gate_dim1
+        self.gate_dim2 = gate_dim2
+        self.gate_size_default = gate_size_default
+        self.is_root = is_root
+        self.panel = panel
+
+        self.init_gate_params(init_tree)
+        self.init_tree = init_tree
+
+    def init_gate_params(self, tree):
+        # first make the gate circular
+        # note that the gate here will have negative values
+        # reminder: the tree gates are normalized to 0,1 at this point
+        print('tree is', tree)
+        dists = [n[2] - n[1] for n in tree]
+        tree = [
+            ''.join(n[0] for n in tree),
+            [n[1] + d/2 for n, d in zip(tree, dists)],
+            sum(dists)/(2*len(tree))
+        ]
+        print('after turning into a ball:', tree)
+    
+        center = tree[1]
+        radius = tree[2]
+
+        self.center_params = [nn.Parameter(
+                torch.tensor(self.__log_odds_ratio__(c),
+                dtype=torch.float32)
+            ) for c in center]
+
+        self.radius_param = nn.Parameter(
+                torch.tensor(
+                self.__log_odds_ratio__(radius), 
+                dtype=torch.float32
+                )
+        )
+
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = zeros_like(grad)
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
+    def forward(self, x):
+        """
+        compute the log probability that each cell passes the gate
+        :param x: (n_cell, n_cell_features)
+        :return: (logp, reg_penalty)
+        """
+        if self.radius_param.requires_grad:
+            self.radius_param.register_hook(self.replace_nans_with_0)
+        if self.center_params[0].requires_grad:
+            for param in self.center_params:
+                param.register_hook(self.replace_nans_with_0)
+
+
+        gate_center = [F.sigmoid(c) for c in self.center_params]
+        radius = F.sigmoid(self.radius_param)
+
+        logp = self.compute_logp(gate_center, radius, x)
+
+        # no ref reg since no ref circle
+        # this regularizations aren't really being used in the code
+        # TODO: clean up these uneeded regularizations
+        ref_reg_penalty = 0
+        init_reg_penalty = 0
+        size_reg_penalty = 0
+        corner_reg_penalty = 0
+
+        return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
+
+
+    def compute_logp(self, centers, radius, x):
+        # first compute distance between center and point
+        components = [(x[:,i] - c)**2 for i, c in enumerate(centers)]
+        acc = torch.zeros_like(components[0])
+        for component in components:
+            acc = acc + component
+
+        dist = torch.sqrt(acc)
+
+        delta_r = dist - radius
+        return F.logsigmoid(-self.logistic_k * delta_r)
+
+    def get_gate(self):
+        gate_center = F.sigmoid(self.center_param)
+        radius = F.sigmoid(self.radius_param)
+        return [gate_center, radius]
+
+    def __repr__(self):
+        repr_string = ('ModelNode(\n'
+                       '  dims=({dim1}, {dim2}),\n'
+                       '  center=({center1:.4f}, {center2:.4f}),\n'
+                       '  radius={radius:.4f},\n'
+                       '  panel={panel},\n'
+                       ')\n')
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        radius = F.sigmoid(self.radius_param)
+
+        return repr_string.format(
+            dim1=self.gate_dim1,
+            dim2=self.gate_dim2,
+            center1=gate_center1.item(),
+            center2=gate_center2.item(),
+            radius=radius.item(),
+            panel=self.panel
+        )

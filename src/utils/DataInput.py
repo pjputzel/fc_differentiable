@@ -138,8 +138,19 @@ class DataInput:
         self.y_tr = self.convert_sample_to_tensor(self.y_tr)
         self.y_te = self.convert_sample_to_tensor(self.y_te)
 
+    def convert_all_data_to_numpy(self):
+        self.x_tr = self.convert_tensors_to_numpy(self.x_tr)
+        self.x_te = self.convert_tensors_to_numpy(self.x_te)
+        self.x_tr_raw = self.convert_tensors_to_numpy(self.x_tr_raw)
+        self.x_te_raw = self.convert_tensors_to_numpy(self.x_te_raw)
+        self.y_tr = self.convert_tensor_to_numpy(self.y_tr)
+        self.y_te = self.convert_tensor_to_numpy(self.y_te)
+
     def convert_samples_to_tensors(self, samples):
         return [self.convert_sample_to_tensor(sample) for sample in samples]
+
+    def convert_tensors_to_numpy(self, samples):
+        return [self.convert_tensor_to_numpy(sample) for sample in samples]
 
     def filter_data_inside_first_model_gate(self, model):
         gate = model.get_gates()[0]
@@ -160,6 +171,9 @@ class DataInput:
     # TODO add cuda functionality here
     def convert_sample_to_tensor(self, sample):
         return torch.tensor(sample, dtype=torch.float32)
+
+    def convert_tensor_to_numpy(self, sample):
+        return torch.tensor(sample, dtype=torch.float32).cpu().detach().numpy()
    
     def save_transformer(self, savedir):
         savepath = os.path.join(savedir, 'transformer.pkl')

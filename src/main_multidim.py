@@ -9,7 +9,7 @@ from utils.DataInput import DataInput
 from utils.GateInitializerPrimKDE import GateInitializerPrimKDE
 from utils.GateInitializerClustering import GateInitializerClustering
 from utils.DepthOneModel import DepthOneModel
-from utils.DataAndGatesPlotter import DataAndGatesPlotterDepthOne
+from utils.DataAndGatesPlotter import MultidimDataAndGatesPlotter
 from utils.DataTransformerFactory import DataTransformerFactory
 from train_UMAP import run_train_model
 import torch
@@ -40,7 +40,8 @@ def main(params):
     data_input = DataInput(params['data_params'])
     data_input.split_data()
     print('%d samples in the training data' %len(data_input.x_tr))
-    data_transformer = DataTransformerFactory(params['transform_params'], params['random_seed']).manufacture_transformer()
+    # force identity for the first transform
+    data_transformer = DataTransformerFactory({'transform_type': 'identity'}, params['random_seed']).manufacture_transformer()
 
     data_input.embed_data_and_fit_transformer(\
         data_transformer,
@@ -52,17 +53,15 @@ def main(params):
     if not params['transform_params'] == 'tsne':
         data_input.save_transformer(params['save_dir'])
     data_input.normalize_data()
-    if params['transform_params']['embed_dim'] == 3:
-        unused_cluster_gate_inits = init_gates(data_input, params)
-    else:
-        unused_cluster_gate_inits = init_plot_and_save_gates(data_input, params)
-    #everything below differs from the other main_UMAP
+
+    # gates aren't plotted because we're in n dimensions
+    unused_cluster_gate_inits = init_gates(data_input, params)
+
     data_input.convert_all_data_to_tensors()
     init_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=None)
     model = initialize_model(params['model_params'], [init_gate_tree])
     trackers_per_round = []
     num_gates_left = len(unused_cluster_gate_inits)
-    #print(num_gates_left, 'asdfasdfasdfasdfasdfasdfas')
     for i in range(num_gates_left + 1):
         performance_tracker = run_train_model(model, params['train_params'], data_input)
         trackers_per_round.append(performance_tracker.get_named_tuple_rep())
@@ -71,10 +70,10 @@ def main(params):
         if not i == num_gates_left:
             next_gate_tree, unused_cluster_gate_inits = get_next_gate_tree(unused_cluster_gate_inits, data_input, params, model=model)
             model.add_node(next_gate_tree)
-        
+
     model_save_path = os.path.join(params['save_dir'], 'model.pkl')
     torch.save(model.state_dict(), model_save_path)
-    
+
     trackers_save_path = os.path.join(params['save_dir'], 'trackers.pkl')
 #    trackers_per_round = [tracker.get_named_tuple_rep() for tracker in trackers_per_round]
     with open(trackers_save_path, 'wb') as f:
@@ -89,18 +88,35 @@ def main(params):
         gate_tree = model.get_gate_tree()
         reflected_gates = []
         for gate in gate_tree:
+            print(gate)
             #order switches since reflected over x=.5
             low_reflected = 1 - gate[0][2]
             high_reflected = 1 - gate[0][1]
             gate[0][1] = low_reflected
             gate[0][2] = high_reflected
-                
+            print(gate)
+
             reflected_gates.append(gate)
         model.init_nodes(reflected_gates)
-    results_plotter = DataAndGatesPlotterDepthOne(model, np.concatenate(data_input.x_tr))
-    #fig, axes = plt.subplots(params['gate_init_params']['n_clusters'], figsize=(1 * params['gate_init_params']['n_clusters'], 3 * params['gate_init_params']['n_clusters']))
+        print(model.init_nodes)
+        print(model.get_gates())
+    data_transformer = DataTransformerFactory(params['transform_params'], params['random_seed']).manufacture_transformer()
+    data_input.convert_all_data_to_numpy()
+    data_input.x_tr = data_input.x_tr_raw
+    data_input.x_te = data_input.x_te_raw
+    old_scale = data_input.scale
+    old_offset = data_input.offset
+    print("fitting projection")
+    data_input.embed_data_and_fit_transformer(\
+        data_transformer,
+        cells_to_subsample=params['transform_params']['cells_to_subsample'],
+        num_cells_for_transformer=params['transform_params']['num_cells_for_transformer'],
+        use_labels_to_transform_data=params['transform_params']['use_labels_to_transform_data']
+    )
+    results_plotter = MultidimDataAndGatesPlotter(model, np.concatenate(data_input.x_tr), np.concatenate(data_input.untransformed_matched_x_tr), old_scale, old_offset, data_input.transformer)
 
-
+    results_plotter.plot_in_feature_space(np.array(np.concatenate([data_input.y_tr[i] * torch.ones([data_input.x_tr[i].shape[0], 1]) for i in range(len(data_input.x_tr))])))
+    plt.savefig(os.path.join(params['save_dir'], 'feature_results.png'))
 
     if params['transform_params']['embed_dim'] == 2:
         results_plotter.plot_data_with_gates(np.array(np.concatenate([data_input.y_tr[i] * torch.ones([data_input.x_tr[i].shape[0], 1]) for i in range(len(data_input.x_tr))])))
@@ -112,7 +128,7 @@ def main(params):
 
         with open(os.path.join(params['save_dir'], 'final_gates_neg_3d.pkl'), 'wb') as f:
             pickle.dump(fig_neg, f)
-        
+
 
 
     with open(os.path.join(params['save_dir'], 'configs.pkl'), 'wb') as f:
@@ -143,9 +159,10 @@ def initialize_model(model_params, init_gate_tree):
     return model
 
 def init_gates(data_input, params):
-    gate_initializer = GateInitializerClustering(data_input.x_tr, params['gate_init_cluster_params'], n_dims=params['transform_params']['embed_dim'])
+    gate_initializer = GateInitializerClustering(data_input.x_tr, params['gate_init_cluster_params'], n_dims=14)
     gate_initializer.initialize_gates() 
     gate_initializer.construct_init_gate_tree()
+    print(init_gates)
     return gate_initializer.init_gate_tree
 
 def init_plot_and_save_gates(data_input, params):
@@ -214,18 +231,6 @@ def get_next_gate_tree_by_log_loss(unused_gate_trees, data_input, params, model=
 
 if __name__ == '__main__':
 
-#    path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
-
-#    path_to_params = '../configs/umap_semi_synth.yaml'
-    path_to_params = '../configs/umap_circular.yaml'
-#    path_to_params = '../configs/umap_tsne.yaml'
-#    path_to_params = '../configs/umap_3d.yaml'
-#    path_to_params = '../configs/umap_pca.yaml'
-#    path_to_params = '../configs/umap_axis_aligned_elliptical.yaml'
-
-#    path_to_params = '../configs/umap_elliptical.yaml'
-#    path_to_params = '../configs/umap_with_presplit.yaml'
-
-#    path_to_params = '../configs/umap_BALL.yaml'
+    path_to_params = '../configs/multidim_circular.yaml'
     main_with_path(path_to_params)    
 
