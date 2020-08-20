@@ -8,8 +8,9 @@ plot_umap_reflection: False
 model_params:
     node_type: 'circular'
     feature_diff_penalty: .10
-    negative_box_penalty: .1
-
+    negative_box_penalty: 1.
+    # for disjunction of all gates
+    depth_one_disjunction_of_all_gates: True
 data_params:
     path_to_x_list: '../data/B-ALL/easy_data.pkl' #'../data/aml_data_tr.pkl' #
     path_to_labels: '../data/B-ALL/easy_data_labels.pkl' #'../data/aml_labels_tr.pkl'   #
@@ -27,12 +28,12 @@ gate_init_cluster_params:
     run_kde_first: False
 
 train_params:
-    n_epoch: 100
-    fix_gates: True
-    #conv_thresh: 0.00001
+    n_epoch: 200
+    fix_gates: False
+#    conv_thresh: 0.00001
     learning_rate_classifier: 0.001
     learning_rate_gates: .05
-    l1_reg_strength: .1
+    l1_reg_strength: 0. #.1
     descent_type: 'coordinate_descent'
     num_gates_to_learn: 1
     annealing: False

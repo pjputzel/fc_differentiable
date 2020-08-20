@@ -1,3 +1,4 @@
+from main_UMAP_with_repeated_gates_and_clustering import main as main_with_sample_level_labels
 import umap
 import warnings
 import pickle
@@ -19,13 +20,14 @@ import time
 from copy import deepcopy
 
 
-def main_with_path(path_to_params):
+def main(path_to_params):
     params = TransformParameterParser(path_to_params).parse_params()
     check_consistency_of_params(params)
-    print(params)
-    main(params)
+    model, _ = main_with_sample_level_labels(params)
+    main_cell_level_labels(params, model)
 
-def main(params):
+
+def main_cell_level_labels(params, model):
     start_time = time.time()
 
 
@@ -37,22 +39,26 @@ def main(params):
 
     with open(os.path.join(params['save_dir'], 'params.pkl'), 'wb') as f:
         pickle.dump(params, f)
+    # Note: using smaller regularization the second time since the discriminative cell level labels 
 
     data_input = DataInput(params['data_params'])
     data_input.split_data()
     print('%d samples in the training data' %len(data_input.x_tr))
     data_transformer = DataTransformerFactory(params['transform_params'], params['random_seed']).manufacture_transformer()
 
+    cell_level_labels = get_cell_level_labels(data_input, model)
     data_input.embed_data_and_fit_transformer(\
         data_transformer,
         cells_to_subsample=params['transform_params']['cells_to_subsample'],
         num_cells_for_transformer=params['transform_params']['num_cells_for_transformer'],
-        use_labels_to_transform_data=params['transform_params']['use_labels_to_transform_data']
+        use_labels_to_transform_data=params['transform_params']['use_labels_to_transform_data'],
+        cell_level_labels=cell_level_labels
     )
     # can't pickle opentsne objects
     if not params['transform_params'] == 'tsne':
         data_input.save_transformer(params['save_dir'])
     data_input.normalize_data()
+    plt.clf()
     if params['transform_params']['embed_dim'] == 3:
         unused_cluster_gate_inits = init_gates(data_input, params)
     else:
@@ -90,14 +96,18 @@ def main(params):
         gate_tree = model.get_gate_tree()
         reflected_gates = []
         for gate in gate_tree:
+            print(gate)
             #order switches since reflected over x=.5
             low_reflected = 1 - gate[0][2]
             high_reflected = 1 - gate[0][1]
             gate[0][1] = low_reflected
             gate[0][2] = high_reflected
+            print(gate)
                 
             reflected_gates.append(gate)
         model.init_nodes(reflected_gates)
+        print(model.init_nodes)
+        print(model.get_gates())
     results_plotter = DataAndGatesPlotterDepthOne(model, np.concatenate(data_input.x_tr))
     #fig, axes = plt.subplots(params['gate_init_params']['n_clusters'], figsize=(1 * params['gate_init_params']['n_clusters'], 3 * params['gate_init_params']['n_clusters']))
 
@@ -105,13 +115,13 @@ def main(params):
 
     if params['transform_params']['embed_dim'] == 2:
         results_plotter.plot_data_with_gates(np.array(np.concatenate([data_input.y_tr[i] * torch.ones([data_input.x_tr[i].shape[0], 1]) for i in range(len(data_input.x_tr))])))
-        plt.savefig(os.path.join(params['save_dir'], 'final_gates.png'))
+        plt.savefig(os.path.join(params['save_dir'], 'final_gates_round2.png'))
     else:
         fig_pos, ax_pos, fig_neg, ax_neg = results_plotter.plot_data_with_gates(np.array(np.concatenate([data_input.y_tr[i] * torch.ones([data_input.x_tr[i].shape[0], 1]) for i in range(len(data_input.x_tr))])))
-        with open(os.path.join(params['save_dir'], 'final_gates_pos_3d.pkl'), 'wb') as f:
+        with open(os.path.join(params['save_dir'], 'final_gates_pos_3d_round2.pkl'), 'wb') as f:
             pickle.dump(fig_pos, f)
 
-        with open(os.path.join(params['save_dir'], 'final_gates_neg_3d.pkl'), 'wb') as f:
+        with open(os.path.join(params['save_dir'], 'final_gates_neg_3d_round2.pkl'), 'wb') as f:
             pickle.dump(fig_neg, f)
         
 
@@ -123,13 +133,20 @@ def main(params):
     return model, trackers_per_round[-1]
 
 
-def set_random_seeds(params):
-    torch.manual_seed(params['random_seed'])
-    np.random.seed(params['random_seed'])
+def get_cell_level_labels(data_input, model):
+    gate = model.nodes[0]
+    all_cell_level_labels = []
+    for data in data_input.x_tr:
+        soft_gates, _, _, _, _ = gate(torch.tensor(data, dtype=torch.float))
+        cell_level_labels = (soft_gates > 0.5).int()
+        all_cell_level_labels.append(cell_level_labels.numpy())
+    return np.concatenate(all_cell_level_labels)
+         
 
 
-# TODO: move this function to a helper file and call it in each main!
 def check_consistency_of_params(params):
+    if not params['transform_params']['use_labels_to_transform_data']:
+        raise ValueError('This main depends on using discriminative UMAP so it needs labels to transform the data!')
     if params['train_params']['descent_type'] == 'joint_descent':
         if not params['train_params']['learning_rate_gates'] == params['train_params']['learning_rate_classifier']:
             raise ValueError('For joint descent learning rate gates and learning rate classifier must be equal')
@@ -138,6 +155,12 @@ def check_consistency_of_params(params):
             warnings.warn('n_epoch parameter is not used when a conv_thresh is set. Training will continue until the change in loss is less than conv_thresh regardless of the number of epochs.')
     if params['transform_params']['use_labels_to_transform_data'] and not (params['transform_params']['transform_type'] == 'umap'):
         raise ValueError('Supervised data transformation only supported with umap')
+    if not (params['train_params']['num_gates_to_learn'] == 1):
+        raise ValueError('Two step discriminative UMAP only currently implemented for a single gate.')
+
+def set_random_seeds(params):
+    torch.manual_seed(params['random_seed'])
+    np.random.seed(params['random_seed'])
 
 def initialize_model(model_params, init_gate_tree):
     if model_params['depth_one_disjunction_of_all_gates']:
@@ -151,6 +174,7 @@ def init_gates(data_input, params):
     gate_initializer = GateInitializerClustering(data_input.x_tr, params['gate_init_cluster_params'], n_dims=params['transform_params']['embed_dim'])
     gate_initializer.initialize_gates() 
     gate_initializer.construct_init_gate_tree()
+    print(init_gates)
     return gate_initializer.init_gate_tree
 
 def init_plot_and_save_gates(data_input, params):
@@ -158,7 +182,7 @@ def init_plot_and_save_gates(data_input, params):
     gate_initializer.initialize_gates() 
     gate_initializer.construct_init_gate_tree()
     gate_initializer.plot_init_gate_tree_with_data()
-    plt.savefig(os.path.join(params['save_dir'], 'init_gates.png'))
+    plt.savefig(os.path.join(params['save_dir'], 'init_gates_round2.png'))
     plt.clf()
 
     return gate_initializer.init_gate_tree
@@ -214,23 +238,7 @@ def get_next_gate_tree_by_log_loss(unused_gate_trees, data_input, params, model=
     best_gate = unused_gate_trees[best_gate_idx]
     del unused_gate_trees[best_gate_idx]
     return best_gate, unused_gate_trees
-        
-
 
 if __name__ == '__main__':
-
-#    path_to_params = '../configs/umap_with_feat_diff_reg.yaml'
-
-#    path_to_params = '../configs/umap_semi_synth.yaml'
     path_to_params = '../configs/umap_circular.yaml'
-#    path_to_params = '../configs/umap_tsne.yaml'
-#    path_to_params = '../configs/umap_3d.yaml'
-#    path_to_params = '../configs/umap_pca.yaml'
-#    path_to_params = '../configs/umap_axis_aligned_elliptical.yaml'
-
-#    path_to_params = '../configs/umap_elliptical.yaml'
-#    path_to_params = '../configs/umap_with_presplit.yaml'
-
-#    path_to_params = '../configs/umap_BALL.yaml'
-    main_with_path(path_to_params)    
-
+    main(path_to_params)

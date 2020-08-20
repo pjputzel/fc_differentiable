@@ -100,10 +100,18 @@ class DataInput:
         
         self.transformer = transformer
 
-    def embed_data_and_fit_transformer(self, transformer, cells_to_subsample=1e5, num_cells_for_transformer=1e10, use_labels_to_transform_data=False):
+    def embed_data_and_fit_transformer(self, 
+        transformer, cells_to_subsample=1e5, 
+        num_cells_for_transformer=1e10, use_labels_to_transform_data=False,
+        cell_level_labels=None
+    ):
         self.x_tr_raw = self.x_tr
         self.x_te_raw = self.x_te
-        cell_level_labels = np.concatenate([np.ones(x.shape[0]) * label for x, label in zip(self.x_tr, self.y_tr)])
+        if cell_level_labels is None:
+            # if we aren't given cell level labels, then just use the sample level label
+            # which means all cells in a positive sample get a 1 as their label
+            cell_level_labels = np.concatenate([np.ones(x.shape[0]) * label for x, label in zip(self.x_tr, self.y_tr)])
+
         if cells_to_subsample:
             permute_idxs = np.random.permutation(cell_level_labels.shape[0])
             labels_keyword_argument = cell_level_labels[permute_idxs][0:int(num_cells_for_transformer)] if use_labels_to_transform_data else None

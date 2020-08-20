@@ -612,7 +612,17 @@ class DataAndGatesPlotterDepthOne(DataAndGatesPlotter):
         colors = cm(np.linspace(0, 1, len(self.gates)))
         lines_for_legend = []
         for g in range(len(self.gates)):
-            line = self.plot_gate_return_line(axis, g, color=colors[g], label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g])
+            # handle case of disjunction where the number of gates is
+            # not the same as the number of features
+            if g > 0:
+                if self.model.depth_one_disjunction_of_all_gates:
+                    label = ''
+                else:
+                    label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g]
+            else:
+                label='%.4f' %self.model.linear.weight[0].cpu().detach().numpy()[g]
+                
+            line = self.plot_gate_return_line(axis, g, color=colors[g], label=label)
             lines_for_legend.append(line)
         return lines_for_legend
             
