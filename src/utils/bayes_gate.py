@@ -1222,6 +1222,10 @@ class ModelTree(nn.Module):
             center = [F.sigmoid(c) for c in node.center_params]
             radius = F.sigmoid(node.radius_param)
             return [center, radius]
+        elif type(node).__name__ == 'HyperrectangleModelNode':
+            lowBorder = [F.sigmoid(b) for b in node.lowBorders]
+            highBorder = [F.sigmoid(b) for b in node.highBorders]
+            return [lowBorder, highBorder]
         else:
             gate_low1 = node.gate_low1_param.cpu().detach().numpy()
             gate_low2 = node.gate_low2_param.cpu().detach().numpy()
@@ -2042,10 +2046,10 @@ class BallModelNode(ModelNode):
         center = tree[1]
         radius = tree[2]
 
-        self.center_params = [nn.Parameter(
+        self.center_params = nn.ParameterList([nn.Parameter(
                 torch.tensor(self.__log_odds_ratio__(c),
                 dtype=torch.float32)
-            ) for c in center]
+            ) for c in center])
 
         self.radius_param = nn.Parameter(
                 torch.tensor(
@@ -2106,6 +2110,114 @@ class BallModelNode(ModelNode):
         gate_center = F.sigmoid(self.center_param)
         radius = F.sigmoid(self.radius_param)
         return [gate_center, radius]
+
+    def __repr__(self):
+        repr_string = ('ModelNode(\n'
+                       '  dims=({dim1}, {dim2}),\n'
+                       '  center=({center1:.4f}, {center2:.4f}),\n'
+                       '  radius={radius:.4f},\n'
+                       '  panel={panel},\n'
+                       ')\n')
+        gate_center1 = F.sigmoid(self.center1_param)
+        gate_center2 = F.sigmoid(self.center2_param)
+        radius = F.sigmoid(self.radius_param)
+
+        return repr_string.format(
+            dim1=self.gate_dim1,
+            dim2=self.gate_dim2,
+            center1=gate_center1.item(),
+            center2=gate_center2.item(),
+            radius=radius.item(),
+            panel=self.panel
+        )
+
+class HyperrectangleModelNode(ModelNode):
+    def __init__(self, logistic_k, init_tree, gate_size_default=(1./4, 1./4), is_root=False, panel='both', gate_dim1='D1', gate_dim2='D2'):
+        super(ModelNode, self).__init__()
+        self.logistic_k = logistic_k
+        self.gate_dim1 = gate_dim1
+        self.gate_dim2 = gate_dim2
+        self.gate_size_default = gate_size_default
+        self.is_root = is_root
+        self.panel = panel
+
+        self.init_gate_params(init_tree)
+        self.init_tree = init_tree
+
+    def init_gate_params(self, tree):
+        # first make the gate circular
+        # note that the gate here will have negative values
+        # reminder: the tree gates are normalized to 0,1 at this point
+        print('tree is', tree)
+
+        self.lowBorders = nn.ParameterList([
+            nn.Parameter(
+                torch.tensor(self.__log_odds_ratio__(b[1]),
+                    dtype=torch.float32
+                )
+            )
+        for b in tree ])
+
+        self.highBorders = nn.ParameterList([
+            nn.Parameter(
+                torch.tensor(self.__log_odds_ratio__(b[2]),
+                    dtype=torch.float32
+                )
+            )
+        for b in tree ])
+
+    def replace_nans_with_0(self, grad):
+        if torch.isnan(grad):
+            grad = zeros_like(grad)
+            if torch.cuda.is_available():
+                grad.cuda()
+        return torch.autograd.Variable(grad)
+
+    def forward(self, x):
+        """
+        compute the log probability that each cell passes the gate
+        :param x: (n_cell, n_cell_features)
+        :return: (logp, reg_penalty)
+        """
+        if self.lowBorders[0].requires_grad:
+            for param in self.lowBorders:
+                param.register_hook(self.replace_nans_with_0)
+        if self.highBorders[0].requires_grad:
+            for param in self.highBorders:
+                param.register_hook(self.replace_nans_with_0)
+
+
+        lowBorder = [F.sigmoid(b) for b in self.lowBorders]
+        highBorder = [F.sigmoid(b) for b in self.highBorders]
+
+        logp = self.compute_logp(lowBorder, highBorder, x)
+
+        # no ref reg since no ref circle
+        # this regularizations aren't really being used in the code
+        # TODO: clean up these uneeded regularizations
+        ref_reg_penalty = 0
+        init_reg_penalty = 0
+        size_reg_penalty = 0
+        corner_reg_penalty = 0
+
+        return logp, ref_reg_penalty, init_reg_penalty, size_reg_penalty, corner_reg_penalty
+
+
+    def compute_logp(self, lowBorder, highBorder, x):
+        low_logp = 0
+        for d in range(x.shape[1]):
+            low_logp += F.logsigmoid(self.logistic_k * ((x[:, d] - lowBorder[d])))
+
+        high_logp = 0
+        for d in range(x.shape[1]):
+            low_logp += F.logsigmoid(- self.logistic_k * ((x[:, d] - highBorder[d]))) 
+
+        return low_logp + high_logp
+
+    def get_gate(self):
+        lowBorder = [F.sigmoid(b) for b in self.lowBorders]
+        highBorder = [F.sigmoid(b) for b in self.highBorders]
+        return [lowBorder, highBorder]
 
     def __repr__(self):
         repr_string = ('ModelNode(\n'

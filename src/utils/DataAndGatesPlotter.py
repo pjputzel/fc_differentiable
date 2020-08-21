@@ -741,16 +741,9 @@ class MultidimDataAndGatesPlotter(DataAndGatesPlotter):
 
         # find which points are in the gate
         gate = self.gates[0]
-        center = np.concatenate([g.detach().numpy() for g in gate[0]]) #  * self.old_scale + self.old_offset;
-        radius = gate[1].detach().numpy() # * self.old_scale
 
-        pos_in_gate = np.linalg.norm((raw_pos - self.old_offset)/self.old_scale - center, axis=1) < radius
-        neg_in_gate = np.linalg.norm((raw_neg - self.old_offset)/self.old_scale - center, axis=1) < radius
-
-        print(center)
-        print(radius)
-        print(raw_pos[0,:])
-        print(np.any(pos_in_gate))
+        pos_in_gate = self.is_in_gate(raw_pos, gate)
+        neg_in_gate = self.is_in_gate(raw_neg, gate)
 
         axes[0].scatter(data_pos[~pos_in_gate][:, 0], data_pos[~pos_in_gate][:, 1], color='k', s=size)
         axes[0].scatter(data_pos[pos_in_gate][:, 0], data_pos[pos_in_gate][:, 1], color='r', s=size)
@@ -923,11 +916,9 @@ class MultidimDataAndGatesPlotter(DataAndGatesPlotter):
 
         # find which points are in the gate
         gate = self.gates[0]
-        center = np.concatenate([g.detach().numpy() for g in gate[0]]) #  * self.old_scale + self.old_offset;
-        radius = gate[1].detach().numpy() # * self.old_scale
 
-        pos_in_gate = np.linalg.norm((raw_pos - self.old_offset)/self.old_scale - center, axis=1) < radius
-        neg_in_gate = np.linalg.norm((raw_neg - self.old_offset)/self.old_scale - center, axis=1) < radius
+        pos_in_gate = self.is_in_gate(raw_pos, gate)
+        neg_in_gate = self.is_in_gate(raw_neg, gate)
 
         if size == None:
             # just a heuristic to get a decent marker size
@@ -944,6 +935,7 @@ class MultidimDataAndGatesPlotter(DataAndGatesPlotter):
             (2, 3): 'SSC-A SSC-H',
             (-1, 5): 'CD 38 CD22'
         }
+
         gate_data_idxs = [[3, 4], [0, 2], [6, 7], [11, 8], [0, 1], [2, 3], [-1, 5]]
         fig, axes = plt.subplots(len(gate_data_idxs), 2, figsize=(figlen * 2, figlen * len(gate_data_idxs)))
         for axs, gate_idxs in zip(axes, gate_data_idxs):
@@ -953,6 +945,20 @@ class MultidimDataAndGatesPlotter(DataAndGatesPlotter):
             axs[1].scatter(raw_neg[neg_in_gate][:, gate_idxs[0]], raw_neg[neg_in_gate][:, gate_idxs[1]], color='r', s=size)
             axs[0].set_title('Positive Cells in %s Space' % gate_names[tuple(gate_idxs)])
             axs[1].set_title('Negative Cells in %s Space' % gate_names[tuple(gate_idxs)])
+
+    def is_in_gate(self, points, gate):
+        if self.model.node_type == 'ball':
+            center = np.concatenate([g.detach().numpy() for g in gate[0]]) #  * self.old_scale + self.old_offset;
+            radius = gate[1].detach().numpy() # * self.old_scale
+            in_gate = np.linalg.norm((points - self.old_offset)/self.old_scale - center, axis=1) < radius
+
+            return in_gate
+        if self.model.node_type == 'hyperrectangle':
+            lowBorder = np.concatenate([g.detach().numpy() for g in gate[0]])
+            highBorder = np.concatenate([g.detach().numpy() for g in gate[1]])
+            points = (points - self.old_offset)/self.old_scale
+
+            return (points > lowBorder).all(axis=1) & (points < highBorder).all(axis=1)
 
     def filter_untransformed_cll(self, gate_idxs, data):
         # 2,3 -> SSC-H, CD45 

@@ -6,6 +6,7 @@ from utils.bayes_gate import AxisAlignedEllipticalModelNode
 from utils.bayes_gate import EllipticalModelNode
 from utils.bayes_gate import SphericalModelNode
 from utils.bayes_gate import BallModelNode
+from utils.bayes_gate import HyperrectangleModelNode
 from utils.bayes_gate import Gate
 import torch 
 import torch.nn as nn
@@ -58,6 +59,8 @@ class DepthOneModel(ModelTree):
             node = SphericalModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
         elif self.node_type == 'ball':
             node = BallModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
+        elif self.node_type == 'hyperrectangle':
+            node = HyperrectangleModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default, gate_dim1='D1', gate_dim2='D2')
         else:
             raise ValueError('Node type not recognized. Options are square, and rectangle')
         return node
