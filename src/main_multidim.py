@@ -231,6 +231,6 @@ def get_next_gate_tree_by_log_loss(unused_gate_trees, data_input, params, model=
 
 if __name__ == '__main__':
 
-    path_to_params = '../configs/multidim_rect.yaml'
+    path_to_params = '../configs/multidim_circular.yaml'
     main_with_path(path_to_params)    
 

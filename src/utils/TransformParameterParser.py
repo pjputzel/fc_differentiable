@@ -111,6 +111,7 @@ DEFAULT_PARAMS =\
                 'descent_type': 'joint_descent',
                 'annealing': False,
                 'fix_gates': False,
+                'scheduler_type': 'constant'
             },
 
         'cross_validate':\
