@@ -95,6 +95,7 @@ DEFAULT_PARAMS =\
                 'gate_size_default': (0.5, 0.5),
                 'neg_proportion_default':0.0001 ,
                 'classifier': True,
+                'use_log_p': False
             },
         'plot_params':\
             {

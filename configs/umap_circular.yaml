@@ -24,9 +24,9 @@ gate_init_cluster_params:
 
 train_params:
     #n_epoch: 20
-    conv_thresh: 0.00001
-    learning_rate_classifier: 0.001
-    learning_rate_gates: .05
+    conv_thresh: 0.0001
+    learning_rate_classifier: 0.0001
+    learning_rate_gates: 0.0001
     l1_reg_strength: .00
     descent_type: 'coordinate_descent'
     num_gates_to_learn: 1

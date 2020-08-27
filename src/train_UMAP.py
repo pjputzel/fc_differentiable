@@ -19,7 +19,7 @@ def run_train_model(model, train_params, data_input):
         if train_params['descent_type'] == 'coordinate_descent':
             run_train_until_convergence_coord(model, train_params, data_input, tracker, optimizer_gates, gates_scheduler, train_params['conv_thresh'])
         elif train_params['descent_type'] == 'joint_descent':
-            run_train_until_convergence_joint(model, train_params, data_input, tracker, full_optimizer, scheduler, gates_train_params['conv_thresh'])
+            run_train_until_convergence_joint(model, train_params, data_input, tracker, full_optimizer, full_scheduler, train_params['conv_thresh'])
         else:
             raise ValueError('Training type not recognized. Options are coordinate_descent and joint_descent.')
     else:
@@ -87,10 +87,8 @@ def run_train_until_convergence_coord(model, train_params, data_input, tracker, 
 def run_train_fixed_epochs_joint(model, train_params, data_input, tracker, full_optimizer, scheduler):
     for epoch in range(train_params['n_epoch']):
         cur_loss = step_params_jointly(model, data_input, full_optimizer, scheduler)
-        print(cur_loss)
         if not (train_params['l1_reg_strength'] == 0):
             cur_loss = cur_loss + model.get_l1_loss(train_params['l1_reg_strength'])
-        print(cur_loss)
         if epoch % train_params['n_epoch_eval'] == 0:
             tracker.update(epoch)
             print_cur_metrics(tracker)

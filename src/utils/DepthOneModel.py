@@ -41,7 +41,7 @@ class DepthOneModel(ModelTree):
         self.num_gates = self.num_gates + 1
         
     def get_node(self, gate):
-        print(self.node_type)
+        print(self.logistic_k)
         if self.node_type == 'square':
             gate = InitGate(gate) 
             node = SquareModelNode(self.logistic_k, gate, gate_size_default=self.gate_size_default)
@@ -79,7 +79,10 @@ class DepthOneModel(ModelTree):
 
         if use_hard_proportions:
             self.output['leaf_probs'] = torch.tensor(self.get_hard_proportions(x)[:, np.newaxis], dtype=torch.float32).cuda()
-        self.output['leaf_logp'] = torch.log(self.output['leaf_probs']).clamp(min=-1000) 
+        if self.use_log_p:
+            self.output['leaf_logp'] = torch.log(self.output['leaf_probs']).clamp(min=-1000) 
+        else:
+            self.output['leaf_logp'] = (self.output['leaf_probs']) 
 
 
         if self.classifier:

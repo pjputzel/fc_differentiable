@@ -4,8 +4,8 @@ plot_umap_reflection: False
 
 model_params:
     node_type: 'hyperrectangle'
-    logistic_k: 50
-    feature_diff_penalty: .0010
+    logistic_k: 100
+    feature_diff_penalty: .010
 
 data_params:
     path_to_x_list: '../data/cll/data_for_UMAP_with_filtering/x_UMAP_dev.pkl' #'../data/aml_data_tr.pkl' #
@@ -24,15 +24,10 @@ gate_init_cluster_params:
     run_kde_first: False
 
 train_params:
-    conv_thresh: 0.0000001
+    conv_thresh: 0.000001
     learning_rate_classifier: 0.001
-    learning_rate_gates: .25
+    learning_rate_gates: .005
+    l1_reg_strength: .01
     descent_type: 'coordinate_descent'
     num_gates_to_learn: 1
-    scheduler_type: 'cosine_annealing_warm_restarts'
-    warm_restart_params:
-      t_0: 100
-      t_mult: 2
-      eta_min: 0
-      last_epoch: -1
       

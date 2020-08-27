@@ -57,22 +57,24 @@ def main(params):
     unused_cluster_gate_inits = init_gates(data_input, params)
 
     # data_input.convert_all_data_to_tensors()
-    dataset = torch.utils.data.TensorDataset(torch.tensor(data_input.x_tr, dtype=torch.float),
-                                             torch.tensor(data_input.y_tr, dtype=torch.float))
-    trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+    figscale = 8
+    fig, axs = plt.subplots(nrows=len(unused_cluster_gate_inits), figsize=(figscale, len(unused_cluster_gate_inits)*figscale))
 
     print("initializing model")
-    model = AllGatesModel(params, unused_cluster_gate_inits)
+    for gate, ax in zip(unused_cluster_gate_inits, axs):
+        dataset = torch.utils.data.TensorDataset(torch.tensor(data_input.x_tr, dtype=torch.float),
+                                                 torch.tensor(data_input.y_tr, dtype=torch.float))
+        trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+        criterion = torch.nn.BCEWithLogitsLoss()
+        model = SingleGateModel(params, gate)
 
-    criterion = torch.nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-7, weight_decay=1e-2)
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-7, weight_decay=1e-2)
 
-    print("initializing LR finder")
-    lr_finder = LRFinder(model, optimizer, criterion)
-    lr_finder.range_test(trainloader, end_lr=1e4, num_iter=20)
-    fig, ax = plt.subplots()
-    lr_finder.plot(ax=ax)
-    print("LR History:", lr_finder.history)
+        print("initializing LR finder")
+        lr_finder = LRFinder(model, optimizer, criterion)
+        lr_finder.range_test(trainloader, end_lr=1e4, num_iter=100)
+        lr_finder.plot(ax=ax)
+        print("LR History:", lr_finder.history)
     plt.savefig(os.path.join(params['save_dir'], 'lr_find.png'))
 
     print('Complete main loop took %.4f seconds' %(time.time() - start_time))
@@ -92,6 +94,17 @@ class AllGatesModel(torch.nn.Module):
             pred += output['y_pred']
 
         return pred/len(self.models)
+
+class SingleGateModel(torch.nn.Module):
+    def __init__(self, params, gate):
+        super(SingleGateModel, self).__init__()
+        self.gate = gate
+        self.model = initialize_model(params['model_params'], [gate])
+
+    def forward(self, x):
+        output = self.model(x)
+
+        return output['y_pred']
 
 def set_random_seeds(params):
     torch.manual_seed(params['random_seed'])
